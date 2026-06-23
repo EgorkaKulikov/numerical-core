@@ -2,8 +2,57 @@ package numerics
 
 import kotlin.math.abs
 import kotlin.math.sqrt
+import org.jetbrains.kotlinx.multik.api.mk
+import org.jetbrains.kotlinx.multik.api.ndarray
+import org.jetbrains.kotlinx.multik.api.linalg.dot
+import org.jetbrains.kotlinx.multik.api.linalg.solve
+import org.jetbrains.kotlinx.multik.ndarray.data.D1Array
+import org.jetbrains.kotlinx.multik.ndarray.data.D2Array
+import org.jetbrains.kotlinx.multik.ndarray.data.get
+import org.jetbrains.kotlinx.multik.ndarray.operations.plus
+import org.jetbrains.kotlinx.multik.ndarray.operations.times
 
+/**
+ * Линейная алгебра над [Array]<[DoubleArray]>.
+ *
+ * Публичный API стабилен (массивы Kotlin), однако тяжёлые операции
+ * (умножения и решение СЛАУ) делегируются библиотеке multik с нативным
+ * бэкендом OpenBLAS (multik-default). Скалярные операции (нормы, проверка
+ * симметрии, разложение Холецкого как health-check) оставлены на чистом
+ * Kotlin. Эталоном корректности служит [ReferenceLinearAlgebra].
+ */
 object LinearAlgebra {
+
+    // --- Конвертеры массивов Kotlin <-> NDArray multik -----------------------
+
+    /** Array<DoubleArray> (rows x cols) -> D2 NDArray. */
+    private fun toD2(a: Array<DoubleArray>): D2Array<Double> =
+        mk.ndarray(a.map { it.toList() })
+
+    /** D1 NDArray -> DoubleArray. */
+    private fun toD1(x: DoubleArray): D1Array<Double> = mk.ndarray(x)
+
+    /** D2 NDArray -> Array<DoubleArray>. */
+    private fun fromD2(m: D2Array<Double>): Array<DoubleArray> {
+        val rows = m.shape[0]
+        val cols = m.shape[1]
+        return Array(rows) { i -> DoubleArray(cols) { j -> m[i, j] } }
+    }
+
+    /** D1 NDArray -> DoubleArray. */
+    private fun fromD1(v: D1Array<Double>): DoubleArray {
+        val n = v.shape[0]
+        return DoubleArray(n) { i -> v[i] }
+    }
+
+    /** Явное (материализованное) транспонирование A (m x n) -> (n x m). */
+    private fun transpose(a: Array<DoubleArray>): Array<DoubleArray> {
+        val m = a.size
+        val n = a[0].size
+        return Array(n) { j -> DoubleArray(m) { i -> a[i][j] } }
+    }
+
+    // --- Тривиальные конструкторы (без multik) -------------------------------
 
     /** Создаёт нулевую матрицу размера rows x cols. */
     fun zeros(rows: Int, cols: Int): Array<DoubleArray> = Array(rows) { DoubleArray(cols) }
@@ -11,75 +60,34 @@ object LinearAlgebra {
     /** Единичная матрица размера n x n. */
     fun identity(n: Int): Array<DoubleArray> = Array(n) { i -> DoubleArray(n) { j -> if (i == j) 1.0 else 0.0 } }
 
+    // --- Тяжёлые операции через multik/OpenBLAS ------------------------------
+
     /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
-    fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray {
-        val m = a.size
-        val out = DoubleArray(m)
-        for (i in 0 until m) {
-            var s = 0.0
-            val row = a[i]
-            for (j in x.indices) s += row[j] * x[j]
-            out[i] = s
-        }
-        return out
-    }
+    fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray =
+        fromD1(toD2(a).dot(toD1(x)))
 
     /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
-    fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray {
-        val m = a.size
-        val n = a[0].size
-        val out = DoubleArray(n)
-        for (i in 0 until m) {
-            val row = a[i]
-            val yi = y[i]
-            for (j in 0 until n) out[j] += row[j] * yi
-        }
-        return out
-    }
+    fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray =
+        fromD1(toD2(transpose(a)).dot(toD1(y)))
 
     /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
-    fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> {
-        val m = a.size
-        val k = b.size
-        val p = b[0].size
-        val out = zeros(m, p)
-        for (i in 0 until m) {
-            val ai = a[i]
-            val oi = out[i]
-            for (l in 0 until k) {
-                val ail = ai[l]
-                if (ail == 0.0) continue
-                val bl = b[l]
-                for (j in 0 until p) oi[j] += ail * bl[j]
-            }
-        }
-        return out
-    }
+    fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> =
+        fromD2(toD2(a).dot(toD2(b)))
 
     /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
     fun atWa(a: Array<DoubleArray>, w: DoubleArray): Array<DoubleArray> {
-        val m = a.size
-        val n = a[0].size
-        val out = zeros(n, n)
-        for (k in 0 until m) {
+        // Масштабируем строки A на w (WA[k][j] = w[k]*A[k][j]) и берём A^T * (WA).
+        val wa = Array(a.size) { k ->
             val row = a[k]
             val wk = w[k]
-            for (i in 0 until n) {
-                val rwi = wk * row[i]
-                if (rwi == 0.0) continue
-                val outI = out[i]
-                for (j in 0 until n) outI[j] += rwi * row[j]
-            }
+            DoubleArray(row.size) { j -> wk * row[j] }
         }
-        return out
+        return fromD2(toD2(transpose(a)).dot(toD2(wa)))
     }
 
     /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
-    fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> {
-        val out = Array(a.size) { a[it].copyOf() }
-        for (i in a.indices) for (j in a[i].indices) out[i][j] += s * b[i][j]
-        return out
-    }
+    fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> =
+        fromD2(toD2(a) + (toD2(b) * s))
 
     /** Евклидова норма вектора. */
     fun norm2(x: DoubleArray): Double = sqrt(x.fold(0.0) { acc, v -> acc + v * v })
@@ -88,46 +96,24 @@ object LinearAlgebra {
     fun normInf(x: DoubleArray): Double = x.fold(0.0) { acc, v -> maxOf(acc, abs(v)) }
 
     /**
-     * Решение плотной СЛАУ A x = b методом LU с частичным выбором ведущего
-     * элемента. Матрица A и вектор b не изменяются (работаем на копиях).
+     * Решение плотной СЛАУ A x = b через multik/OpenBLAS (LAPACK).
+     *
+     * Входные A и b не изменяются: multik копирует данные в собственные
+     * ndarray. Семантика вырожденности сохранена вручную: LAPACK для точно
+     * вырожденной матрицы может не бросить исключение, а вернуть NaN/Inf,
+     * поэтому исключения оборачиваются, а результат дополнительно проверяется.
      * @throws IllegalStateException при вырожденности.
      */
     fun solve(a: Array<DoubleArray>, b: DoubleArray): DoubleArray {
-        val n = a.size
-        val lu = Array(n) { a[it].copyOf() }
-        val x = b.copyOf()
-        val piv = IntArray(n) { it }
-        for (col in 0 until n) {
-            var pivRow = col
-            var pivVal = abs(lu[col][col])
-            for (r in col + 1 until n) {
-                val v = abs(lu[r][col])
-                if (v > pivVal) { pivVal = v; pivRow = r }
-            }
-            if (pivVal < 1e-300) error("LU: матрица вырождена (col=$col)")
-            if (pivRow != col) {
-                val t = lu[col]; lu[col] = lu[pivRow]; lu[pivRow] = t
-                val tx = x[col]; x[col] = x[pivRow]; x[pivRow] = tx
-                val tp = piv[col]; piv[col] = piv[pivRow]; piv[pivRow] = tp
-            }
-            val pivotR = lu[col]
-            val pivot = pivotR[col]
-            for (r in col + 1 until n) {
-                val factor = lu[r][col] / pivot
-                lu[r][col] = factor
-                val rowR = lu[r]
-                for (c in col + 1 until n) rowR[c] -= factor * pivotR[c]
-                x[r] -= factor * x[col]
-            }
+        val result = try {
+            fromD1(mk.linalg.solve(toD2(a), toD1(b)))
+        } catch (e: Exception) {
+            throw IllegalStateException("LU/solve: матрица вырождена", e)
         }
-        // обратный ход
-        for (i in n - 1 downTo 0) {
-            var s = x[i]
-            val row = lu[i]
-            for (j in i + 1 until n) s -= row[j] * x[j]
-            x[i] = s / row[i]
+        for (v in result) {
+            if (v.isNaN() || v.isInfinite()) error("LU/solve: матрица вырождена")
         }
-        return x
+        return result
     }
 
     /**
@@ -159,4 +145,3 @@ object LinearAlgebra {
         return m
     }
 }
-
