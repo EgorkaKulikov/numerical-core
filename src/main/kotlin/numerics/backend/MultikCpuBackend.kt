@@ -40,9 +40,48 @@ object MultikCpuBackend : LinAlgBackend {
 
     // --- Конвертеры массивов Kotlin <-> NDArray multik -----------------------
 
-    /** Array<DoubleArray> (rows x cols) -> D2 NDArray. */
-    private fun toD2(a: Array<DoubleArray>): D2Array<Double> =
-        mk.ndarray(a.map { it.toList() })
+    /**
+     * Array<DoubleArray> (rows x cols) -> D2 NDArray.
+     *
+     * Собираем плоский C-order `DoubleArray` и создаём ndarray на примитивном
+     * пути `mk.ndarray(flat, rows, cols)` — без боксинга элементов в
+     * java.lang.Double и без промежуточных List<Double>.
+     */
+    private fun toD2(a: Array<DoubleArray>): D2Array<Double> {
+        val rows = a.size
+        val cols = if (rows == 0) 0 else a[0].size
+        val flat = DoubleArray(rows * cols)
+        var offset = 0
+        for (row in a) {
+            System.arraycopy(row, 0, flat, offset, cols)
+            offset += cols
+        }
+        return mk.ndarray(flat, rows, cols)
+    }
+
+    /**
+     * A^T как contiguous D2 NDArray (n x m для A размера m x n).
+     *
+     * Материализуем транспонирование в плоский C-order `DoubleArray` без
+     * боксинга и строим ndarray через `mk.ndarray(flatT, cols, rows)`.
+     * Причина: в multik 0.2.3 `dot` некорректно учитывает strides
+     * транспонированной VIEW для НЕквадратных матриц (даёт неверный результат),
+     * поэтому передаём в BLAS уже contiguous-массив.
+     */
+    private fun toD2Transposed(a: Array<DoubleArray>): D2Array<Double> {
+        val rows = a.size
+        val cols = if (rows == 0) 0 else a[0].size
+        val flatT = DoubleArray(rows * cols)
+        for (i in 0 until rows) {
+            val row = a[i]
+            var idx = i
+            for (j in 0 until cols) {
+                flatT[idx] = row[j]
+                idx += rows
+            }
+        }
+        return mk.ndarray(flatT, cols, rows)
+    }
 
     /** D1 NDArray -> DoubleArray. */
     private fun toD1(x: DoubleArray): D1Array<Double> = mk.ndarray(x)
@@ -60,20 +99,15 @@ object MultikCpuBackend : LinAlgBackend {
         return DoubleArray(n) { i -> v[i] }
     }
 
-    /** Явное (материализованное) транспонирование A (m x n) -> (n x m). */
-    private fun transpose(a: Array<DoubleArray>): Array<DoubleArray> {
-        val m = a.size
-        val n = a[0].size
-        return Array(n) { j -> DoubleArray(m) { i -> a[i][j] } }
-    }
-
     // --- Тяжёлые операции через multik/OpenBLAS ------------------------------
 
     override fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray =
         fromD1(toD2(a).dot(toD1(x)))
 
     override fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray =
-        fromD1(toD2(transpose(a)).dot(toD1(y)))
+        // A^T материализуем в contiguous ndarray (без боксинга): view-транспонирование
+        // ломает dot для неквадратных матриц в multik 0.2.3.
+        fromD1(toD2Transposed(a).dot(toD1(y)))
 
     override fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> =
         fromD2(toD2(a).dot(toD2(b)))
@@ -85,7 +119,8 @@ object MultikCpuBackend : LinAlgBackend {
             val wk = w[k]
             DoubleArray(row.size) { j -> wk * row[j] }
         }
-        return fromD2(toD2(transpose(a)).dot(toD2(wa)))
+        // A^T материализуем в contiguous ndarray (без боксинга) — см. toD2Transposed.
+        return fromD2(toD2Transposed(a).dot(toD2(wa)))
     }
 
     override fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> =
