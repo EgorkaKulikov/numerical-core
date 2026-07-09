@@ -30,6 +30,25 @@ class QuadratureTest {
         assertEquals(8.0 / 3.0, q.integrateInterval(0.0, 2.0) { t -> t * t }, 1e-10)
     }
 
+    /**
+     * Regression guard for the Newton iteration over Legendre zeros (early-exit fix):
+     * for every order m the rule must be exact on the monomial t^(2m-1) (degree 2m-1),
+     * which is only possible if Newton converged to the TRUE nodes. If the loop had
+     * exited early/incorrectly the nodes would drift and this integral would be wrong.
+     */
+    @Test fun newtonNodesExactUpToDegree2mMinus1() {
+        for (m in 2..12) {
+            val q = GaussLegendre(m)
+            val deg = 2 * m - 1
+            val expected = 1.0 / (deg + 1) // ∫_0^1 t^deg dt
+            val got = q.integrate(bp01) { t -> Math.pow(t, deg.toDouble()) }
+            assertEquals(expected, got, 1e-12, "m=$m deg=$deg")
+            // Weights on [-1,1] must sum to the interval length (2).
+            val (_, w) = GaussLegendre.gaussLegendreReference(m)
+            assertEquals(2.0, w.sum(), 1e-13, "weights sum m=$m")
+        }
+    }
+
     @Test fun compositeSubdivisionConsistent() {
         // Both single-interval and split quadratures approximate the same integral;
         // for a smooth integrand with 8 nodes/sub they must agree closely.

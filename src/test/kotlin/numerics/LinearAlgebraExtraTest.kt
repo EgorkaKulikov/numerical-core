@@ -3,6 +3,7 @@ package numerics
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -110,5 +111,31 @@ class LinearAlgebraExtraTest {
         assertEquals(1.0, x[0], 1e-10)
         assertEquals(2.0, x[1], 1e-10)
         assertEquals(3.0, x[2], 1e-10)
+    }
+
+    /** Регресс #6: пустой/несогласованный вход в публичные методы -> понятное исключение. */
+    @Test fun emptyAndMismatchedInputsThrow() {
+        val empty = emptyArray<DoubleArray>()
+        val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0))
+        // matVec
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.matVec(empty, doubleArrayOf()) }
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.matVec(a, doubleArrayOf(1.0)) }
+        // matMat
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.matMat(empty, a) }
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.matMat(a, arrayOf(doubleArrayOf(1.0))) }
+        // atWa
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.atWa(empty, doubleArrayOf()) }
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.atWa(a, doubleArrayOf(1.0)) }
+        // solve
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.solve(empty, doubleArrayOf()) }
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.solve(a, doubleArrayOf(1.0)) }
+    }
+
+    /** Регресс #6: валидные операции продолжают работать после добавления guard. */
+    @Test fun validOperationsStillWork() {
+        val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0))
+        val r = LinearAlgebra.matVec(a, doubleArrayOf(1.0, 1.0))
+        assertEquals(3.0, r[0], tol)
+        assertEquals(7.0, r[1], tol)
     }
 }

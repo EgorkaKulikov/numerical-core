@@ -58,8 +58,8 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
             val weights = DoubleArray(m)
             for (i in 0 until (m + 1) / 2) {
                 var x = Math.cos(Math.PI * (i + 0.75) / (m + 0.5))
-                var dp = 0.0
-                repeat(100) {
+                var dp: Double
+                for (iter in 0 until 100) {
                     var p0 = 1.0
                     var p1 = x
                     for (k in 2..m) {
@@ -69,7 +69,7 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
                     dp = m * (x * p1 - p0) / (x * x - 1.0)
                     val dx = p1 / dp
                     x -= dx
-                    if (abs(dx) < 1e-15) return@repeat
+                    if (abs(dx) < 1e-15) break
                 }
                 var p0 = 1.0
                 var p1 = x

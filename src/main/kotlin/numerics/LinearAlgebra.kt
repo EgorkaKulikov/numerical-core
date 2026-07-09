@@ -33,20 +33,30 @@ object LinearAlgebra {
     // --- Тяжёлые операции: делегирование активному бэкенду --------------------
 
     /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
-    fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray =
-        Backends.active.matVec(a, x)
+    fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray {
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "matVec: пустая матрица A" }
+        require(a[0].size == x.size) { "matVec: несогласованные размеры A(${a.size}x${a[0].size}) и x(${x.size})" }
+        return Backends.active.matVec(a, x)
+    }
 
     /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
     fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray =
         Backends.active.matTransVec(a, y)
 
     /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
-    fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> =
-        Backends.active.matMat(a, b)
+    fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> {
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "matMat: пустая матрица A" }
+        require(b.isNotEmpty() && b[0].isNotEmpty()) { "matMat: пустая матрица B" }
+        require(a[0].size == b.size) { "matMat: несогласованные размеры A(${a.size}x${a[0].size}) и B(${b.size}x${b[0].size})" }
+        return Backends.active.matMat(a, b)
+    }
 
     /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
-    fun atWa(a: Array<DoubleArray>, w: DoubleArray): Array<DoubleArray> =
-        Backends.active.atWa(a, w)
+    fun atWa(a: Array<DoubleArray>, w: DoubleArray): Array<DoubleArray> {
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "atWa: пустая матрица A" }
+        require(a.size == w.size) { "atWa: несогласованные размеры A(${a.size} строк) и w(${w.size})" }
+        return Backends.active.atWa(a, w)
+    }
 
     /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
     fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> =
@@ -58,8 +68,11 @@ object LinearAlgebra {
      * Входные A и b не изменяются. Семантика вырожденности сохранена:
      * @throws IllegalStateException при вырожденности.
      */
-    fun solve(a: Array<DoubleArray>, b: DoubleArray): DoubleArray =
-        Backends.active.solve(a, b)
+    fun solve(a: Array<DoubleArray>, b: DoubleArray): DoubleArray {
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "solve: пустая матрица A" }
+        require(a.size == b.size) { "solve: несогласованные размеры A(${a.size} строк) и b(${b.size})" }
+        return Backends.active.solve(a, b)
+    }
 
     // --- Дешёвые скалярные/служебные операции (без бэкенда) ------------------
 
