@@ -40,8 +40,11 @@ object LinearAlgebra {
     }
 
     /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
-    fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray =
-        Backends.active.matTransVec(a, y)
+    fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray {
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "matTransVec: пустая матрица A" }
+        require(a.size == y.size) { "matTransVec: несогласованные размеры A(${a.size} строк) и y(${y.size})" }
+        return Backends.active.matTransVec(a, y)
+    }
 
     /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
     fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> {
@@ -59,8 +62,13 @@ object LinearAlgebra {
     }
 
     /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
-    fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> =
-        Backends.active.addScaled(a, b, s)
+    fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> {
+        require(a.size == b.size) { "addScaled: несогласованное число строк A(${a.size}) и B(${b.size})" }
+        require(a.isEmpty() || a[0].size == b[0].size) {
+            "addScaled: несогласованное число столбцов A(${a[0].size}) и B(${b[0].size})"
+        }
+        return Backends.active.addScaled(a, b, s)
+    }
 
     /**
      * Решение плотной СЛАУ A x = b через активный бэкенд.
