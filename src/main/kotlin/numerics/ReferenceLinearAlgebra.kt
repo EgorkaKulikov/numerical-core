@@ -95,15 +95,40 @@ object ReferenceLinearAlgebra {
     fun normInf(x: DoubleArray): Double = x.fold(0.0) { acc, v -> maxOf(acc, abs(v)) }
 
     /**
+     * Порог вырожденности ведущего элемента, ОТНОСИТЕЛЬНЫЙ к масштабу матрицы.
+     *
+     * Используется как `PIVOT_RELATIVE_TOLERANCE * ||A||_inf`. Абсолютный порог
+     * (ранее 1e-300) фактически проверял лишь строгий машинный ноль и пропускал
+     * практически вырожденные матрицы: система с числом обусловленности ~1e18
+     * решалась молча и возвращала мусор. Значение 1e-14 близко к машинному эпсилону
+     * double (2.2e-16) с запасом на накопление ошибок исключения Гаусса.
+     */
+    private const val PIVOT_RELATIVE_TOLERANCE = 1e-14
+
+    /**
      * Решение плотной СЛАУ A x = b методом LU с частичным выбором ведущего
      * элемента. Матрица A и вектор b не изменяются (работаем на копиях).
-     * @throws IllegalStateException при вырожденности.
+     *
+     * Семантика вырожденности согласована с [numerics.backend.MultikCpuBackend.solve]:
+     * вырожденность распознаётся по ведущему элементу, малому ОТНОСИТЕЛЬНО нормы
+     * матрицы, а результат дополнительно проверяется на NaN/Inf (нативный LAPACK для
+     * вырожденной матрицы может вернуть NaN вместо ошибки, и оба бэкенда обязаны
+     * вести себя одинаково).
+     *
+     * @throws IllegalStateException при вырожденности или нечисловом результате.
      */
     fun solve(a: Array<DoubleArray>, b: DoubleArray): DoubleArray {
         val n = a.size
         val lu = Array(n) { a[it].copyOf() }
         val x = b.copyOf()
-        val piv = IntArray(n) { it }
+        // Масштаб матрицы: максимальная строчная сумма модулей (норма ||A||_inf).
+        var matrixNorm = 0.0
+        for (row in a) {
+            var rowSum = 0.0
+            for (v in row) rowSum += abs(v)
+            matrixNorm = maxOf(matrixNorm, rowSum)
+        }
+        val pivotTolerance = PIVOT_RELATIVE_TOLERANCE * maxOf(matrixNorm, java.lang.Double.MIN_NORMAL)
         for (col in 0 until n) {
             var pivRow = col
             var pivVal = abs(lu[col][col])
@@ -111,11 +136,10 @@ object ReferenceLinearAlgebra {
                 val v = abs(lu[r][col])
                 if (v > pivVal) { pivVal = v; pivRow = r }
             }
-            if (pivVal < 1e-300) error("LU: матрица вырождена (col=$col)")
+            if (pivVal <= pivotTolerance) error("LU: матрица вырождена (col=$col)")
             if (pivRow != col) {
                 val t = lu[col]; lu[col] = lu[pivRow]; lu[pivRow] = t
                 val tx = x[col]; x[col] = x[pivRow]; x[pivRow] = tx
-                val tp = piv[col]; piv[col] = piv[pivRow]; piv[pivRow] = tp
             }
             val pivotR = lu[col]
             val pivot = pivotR[col]
@@ -133,6 +157,12 @@ object ReferenceLinearAlgebra {
             val row = lu[i]
             for (j in i + 1 until n) s -= row[j] * x[j]
             x[i] = s / row[i]
+        }
+        // Единая с multik-бэкендом реакция на нечисловой результат: если во входных
+        // данных был NaN/Inf, молча вернуть NaN-вектор нельзя — бэкенды обязаны быть
+        // наблюдаемо неразличимы.
+        for (v in x) {
+            if (v.isNaN() || v.isInfinite()) error("LU: матрица вырождена (нечисловой результат)")
         }
         return x
     }
