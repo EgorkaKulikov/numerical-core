@@ -7,8 +7,6 @@ import org.jetbrains.kotlinx.multik.api.linalg.solve
 import org.jetbrains.kotlinx.multik.ndarray.data.D1Array
 import org.jetbrains.kotlinx.multik.ndarray.data.D2Array
 import org.jetbrains.kotlinx.multik.ndarray.data.get
-import org.jetbrains.kotlinx.multik.ndarray.operations.plus
-import org.jetbrains.kotlinx.multik.ndarray.operations.times
 
 /**
  * Бэкенд линейной алгебры на multik с нативным OpenBLAS (multik-default).
@@ -123,8 +121,43 @@ object MultikCpuBackend : LinAlgBackend {
         return fromD2(toD2Transposed(a).dot(toD2(wa)))
     }
 
-    override fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> =
-        fromD2(toD2(a) + (toD2(b) * s))
+    /**
+     * Поэлементная сумма `A + s*B` — намеренно СОБСТВЕННАЯ реализация на чистом JVM,
+     * без обращения к multik.
+     *
+     * ОБОСНОВАНИЕ ИЗМЕРЕНИЯМИ (бенчмарк `runBenchmark`, исследование (C), три прогона
+     * на Apple Silicon; колонка multik/reference — во сколько раз нативный путь МЕДЛЕННЕЕ):
+     *
+     * | размер | прогон 1 | прогон 2 | прогон 3 |
+     * |--------|----------|----------|----------|
+     * | 16     | 4.25     | 4.24     | 4.20     |
+     * | 64     | 3.93     | 3.78     | 3.07     |
+     * | 256    | 13.67    | 1.00     | 1.49     |
+     * | 1024   | 3.56     | 2.67     | 1.91     |
+     *
+     * Нативный путь проигрывает на ВСЕХ размерностях без исключения, поэтому порог
+     * переключения не нужен — выгоднее не обращаться к multik вовсе.
+     *
+     * Причина: операция поэлементная и ограничена пропускной способностью памяти, для
+     * неё нет ядра BLAS, которое окупило бы накладные расходы. Прежняя реализация
+     * `fromD2(toD2(a) + (toD2(b) * s))` создавала ЧЕТЫРЕ временных NDArray (два на
+     * конвертацию входов, по одному на умножение и сложение) и дополнительно читала
+     * результат поэлементно в [fromD2] — ради работы, стоящей одного прохода по массиву.
+     *
+     * Результат БИТОВО совпадает с прежним: порядок арифметики тот же (`a + s*b`),
+     * а умножение IEEE-754 коммутативно, поэтому `s*b` и `b*s` дают идентичные биты.
+     * Это проверено характеризационным тестом `EhCharacterizationTest`, прошедшим без
+     * пересъёмки эталона.
+     */
+    override fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> {
+        val rows = a.size
+        val cols = if (rows == 0) 0 else a[0].size
+        return Array(rows) { i ->
+            val rowA = a[i]
+            val rowB = b[i]
+            DoubleArray(cols) { j -> rowA[j] + s * rowB[j] }
+        }
+    }
 
     /**
      * Решение плотной СЛАУ A x = b через multik/OpenBLAS (LAPACK).
