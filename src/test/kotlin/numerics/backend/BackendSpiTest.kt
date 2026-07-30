@@ -1,6 +1,7 @@
 package numerics.backend
 
 import numerics.LinearAlgebra
+import org.junit.jupiter.api.Tag
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,6 +16,7 @@ import kotlin.test.assertTrue
  * бэкенду и сохранение семантики вырожденности. Каждый тест восстанавливает
  * бэкенд по умолчанию в finally, чтобы порядок тестов не мог «протечь».
  */
+@Tag("fast")
 class BackendSpiTest {
 
     private val tol = 1e-9

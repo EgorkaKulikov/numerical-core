@@ -1,5 +1,6 @@
 package numerics
 
+import org.junit.jupiter.api.Tag
 import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,6 +12,7 @@ import kotlin.test.assertTrue
  * транспонированные/векторные операции, нормы и перестановку строк в LU-solve.
  * Эталоны вычисляются из аналитики прямо в тесте — без магических чисел.
  */
+@Tag("fast")
 class LinearAlgebraExtraTest {
     private val tol = 1e-12
 

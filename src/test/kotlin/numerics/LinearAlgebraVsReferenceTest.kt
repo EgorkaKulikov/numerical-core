@@ -1,5 +1,6 @@
 package numerics
 
+import org.junit.jupiter.api.Tag
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,6 +14,7 @@ import kotlin.test.assertTrue
  * совпадать с точностью до 1e-8: нативный OpenBLAS и ручной LU не должны
  * расходиться на хорошо обусловленных входах.
  */
+@Tag("fast")
 class LinearAlgebraVsReferenceTest {
 
     private val tol = 1e-8

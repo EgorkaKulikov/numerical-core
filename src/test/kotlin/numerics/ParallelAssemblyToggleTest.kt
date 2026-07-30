@@ -1,5 +1,6 @@
 package numerics
 
+import org.junit.jupiter.api.Tag
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -8,6 +9,7 @@ import kotlin.test.assertTrue
  * результат сборки: последовательный и параллельный пути дают идентичные матрицы.
  * Это обоснование того, что бенчмарк меряет seq/par ускорение на одном коде.
  */
+@Tag("fast")
 class ParallelAssemblyToggleTest {
 
     /** Нетривиальная, не-симметричная ячейка с разным вкладом строки/столбца. */

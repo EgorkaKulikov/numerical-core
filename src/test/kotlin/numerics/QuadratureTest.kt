@@ -1,10 +1,12 @@
 package numerics
 
+import org.junit.jupiter.api.Tag
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+@Tag("fast")
 class QuadratureTest {
     private val bp01 = doubleArrayOf(0.0, 1.0)
 

@@ -1,5 +1,6 @@
 package numerics
 
+import org.junit.jupiter.api.Tag
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
@@ -13,6 +14,7 @@ import kotlin.test.assertTrue
  * результат, что и последовательное заполнение: используется крупный размер
  * (200x200), чтобы реально задействовать пул потоков ForkJoin.
  */
+@Tag("fast")
 class ParallelAssemblyTest {
 
     private val sizes = arrayOf(

@@ -1,5 +1,6 @@
 package numerics
 
+import org.junit.jupiter.api.Tag
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -7,6 +8,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.assertThrows
 
+@Tag("fast")
 class LinearAlgebraTest {
     private val tol = 1e-12
 
