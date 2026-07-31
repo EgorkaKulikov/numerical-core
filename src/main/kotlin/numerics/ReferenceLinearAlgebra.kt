@@ -1,7 +1,6 @@
 package numerics
 
 import kotlin.math.abs
-import kotlin.math.sqrt
 
 /**
  * Эталонная (reference) реализация линейной алгебры на чистом Kotlin.
@@ -9,14 +8,17 @@ import kotlin.math.sqrt
  * Это «оракул корректности»: точная копия исходной ручной реализации
  * [LinearAlgebra], сохранённая для перекрёстной проверки оптимизированного
  * multik/OpenBLAS-бэкенда. Не используется в боевых вычислениях, только в тестах.
+ *
+ * НЕЗАВИСИМОСТЬ ОТ ПРОВЕРЯЕМОГО КОДА — главное свойство этого файла. Оракул не
+ * ссылается ни на фасад `LinearAlgebra`, ни на `Backends`: иначе тест сверки
+ * `LinearAlgebraVsReferenceTest` замкнулся бы сам на себя и перестал что-либо
+ * доказывать. Общие с фасадом дешёвые операции берутся из [DenseOps] — третьего
+ * объекта, который сам не зависит ни от фасада, ни от бэкендов.
  */
 object ReferenceLinearAlgebra {
 
     /** Создаёт нулевую матрицу размера rows x cols. */
-    fun zeros(rows: Int, cols: Int): Array<DoubleArray> = Array(rows) { DoubleArray(cols) }
-
-    /** Единичная матрица размера n x n. */
-    fun identity(n: Int): Array<DoubleArray> = Array(n) { i -> DoubleArray(n) { j -> if (i == j) 1.0 else 0.0 } }
+    private fun zeros(rows: Int, cols: Int): Array<DoubleArray> = DenseOps.zeros(rows, cols)
 
     /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
     fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray {
@@ -87,12 +89,6 @@ object ReferenceLinearAlgebra {
         for (i in a.indices) for (j in a[i].indices) out[i][j] += s * b[i][j]
         return out
     }
-
-    /** Евклидова норма вектора. */
-    fun norm2(x: DoubleArray): Double = sqrt(x.fold(0.0) { acc, v -> acc + v * v })
-
-    /** Бесконечная (равномерная) норма вектора. */
-    fun normInf(x: DoubleArray): Double = x.fold(0.0) { acc, v -> maxOf(acc, abs(v)) }
 
     /**
      * Порог вырожденности ведущего элемента, ОТНОСИТЕЛЬНЫЙ к масштабу матрицы.
@@ -178,35 +174,6 @@ object ReferenceLinearAlgebra {
             if (v.isNaN() || v.isInfinite()) error("LU: матрица вырождена (нечисловой результат)")
         }
         return x
-    }
-
-    /**
-     * Разложение Холецкого A = L L^T для симметричной положительно определённой A.
-     * @return нижнетреугольная L или null, если A не положительно определена.
-     */
-    fun cholesky(a: Array<DoubleArray>): Array<DoubleArray>? {
-        val n = a.size
-        val l = zeros(n, n)
-        for (i in 0 until n) {
-            for (j in 0..i) {
-                var s = a[i][j]
-                for (k in 0 until j) s -= l[i][k] * l[j][k]
-                if (i == j) {
-                    if (s <= 0.0) return null
-                    l[i][j] = sqrt(s)
-                } else {
-                    l[i][j] = s / l[j][j]
-                }
-            }
-        }
-        return l
-    }
-
-    /** Симметрия: max|A - A^T|. */
-    fun maxAsymmetry(a: Array<DoubleArray>): Double {
-        var m = 0.0
-        for (i in a.indices) for (j in a.indices) m = maxOf(m, abs(a[i][j] - a[j][i]))
-        return m
     }
 }
 

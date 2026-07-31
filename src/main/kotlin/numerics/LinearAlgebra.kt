@@ -1,7 +1,6 @@
 package numerics
 
 import kotlin.math.abs
-import kotlin.math.sqrt
 import numerics.backend.Backends
 
 /**
@@ -25,10 +24,10 @@ object LinearAlgebra {
     // --- Тривиальные конструкторы (без бэкенда) ------------------------------
 
     /** Создаёт нулевую матрицу размера rows x cols. */
-    fun zeros(rows: Int, cols: Int): Array<DoubleArray> = Array(rows) { DoubleArray(cols) }
+    fun zeros(rows: Int, cols: Int): Array<DoubleArray> = DenseOps.zeros(rows, cols)
 
     /** Единичная матрица размера n x n. */
-    fun identity(n: Int): Array<DoubleArray> = Array(n) { i -> DoubleArray(n) { j -> if (i == j) 1.0 else 0.0 } }
+    fun identity(n: Int): Array<DoubleArray> = DenseOps.identity(n)
 
     // --- Тяжёлые операции: делегирование активному бэкенду --------------------
 
@@ -176,41 +175,29 @@ object LinearAlgebra {
     }
 
     // --- Дешёвые скалярные/служебные операции (без бэкенда) ------------------
+    // Реализации живут в [DenseOps] — едином источнике, общем с оракулом
+    // [ReferenceLinearAlgebra]; здесь остаются только публичный контракт и валидация.
 
     /** Евклидова норма вектора. */
-    fun norm2(x: DoubleArray): Double = sqrt(x.fold(0.0) { acc, v -> acc + v * v })
+    fun norm2(x: DoubleArray): Double = DenseOps.norm2(x)
 
     /** Бесконечная (равномерная) норма вектора. */
-    fun normInf(x: DoubleArray): Double = x.fold(0.0) { acc, v -> maxOf(acc, abs(v)) }
+    fun normInf(x: DoubleArray): Double = DenseOps.normInf(x)
 
     /**
      * Разложение Холецкого A = L L^T для симметричной положительно определённой A.
      * @return нижнетреугольная L или null, если A не положительно определена.
      */
-    fun cholesky(a: Array<DoubleArray>): Array<DoubleArray>? {
-        val n = a.size
-        val l = zeros(n, n)
-        for (i in 0 until n) {
-            for (j in 0..i) {
-                var s = a[i][j]
-                for (k in 0 until j) s -= l[i][k] * l[j][k]
-                if (i == j) {
-                    if (s <= 0.0) return null
-                    l[i][j] = sqrt(s)
-                } else {
-                    l[i][j] = s / l[j][j]
-                }
-            }
-        }
-        return l
-    }
+    fun cholesky(a: Array<DoubleArray>): Array<DoubleArray>? = DenseOps.cholesky(a)
 
     /**
      * Симметрия: max|A - A^T|.
      *
      * Индексация `a[i][j]` идёт по `a.indices` по обоим индексам, т.е. квадратность требуется
      * по самому определению A^T; без проверки неквадратный/рваный вход давал бы
-     * AIOOBE вместо диагностики.
+     * AIOOBE вместо диагностики. Проверки живут ИМЕННО ЗДЕСЬ, а не в [DenseOps]:
+     * это контракт боевого фасада, а оракул [ReferenceLinearAlgebra] исторически
+     * таких проверок не делает, и менять его поведение нельзя.
      */
     fun maxAsymmetry(a: Array<DoubleArray>): Double {
         require(a.isNotEmpty() && a[0].isNotEmpty()) { "maxAsymmetry: пустая матрица A" }
@@ -220,8 +207,6 @@ object LinearAlgebra {
         for (i in a.indices) require(a[i].size == a.size) {
             "maxAsymmetry: рваная матрица A — строка $i длины ${a[i].size}, ожидалось ${a.size}"
         }
-        var m = 0.0
-        for (i in a.indices) for (j in a.indices) m = maxOf(m, abs(a[i][j] - a[j][i]))
-        return m
+        return DenseOps.maxAsymmetry(a)
     }
 }
