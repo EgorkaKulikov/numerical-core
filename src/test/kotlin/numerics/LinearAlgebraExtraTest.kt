@@ -133,6 +133,41 @@ class LinearAlgebraExtraTest {
         assertFailsWith<IllegalArgumentException> { LinearAlgebra.solve(a, doubleArrayOf(1.0)) }
     }
 
+    /**
+     * solve требует КВАДРАТНОЙ A: бэкенды исходят из n x n, и без проверки прямоугольный
+     * вход давал бы либо исключение из глубины, либо тихо неверный ответ.
+     */
+    @Test fun solveRejectsNonSquareMatrix() {
+        // 2x3: строк меньше, чем столбцов
+        val wide = arrayOf(doubleArrayOf(1.0, 2.0, 3.0), doubleArrayOf(4.0, 5.0, 6.0))
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.solve(wide, doubleArrayOf(1.0, 2.0)) }
+        // 3x2: столбцов меньше, чем строк
+        val tall = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0), doubleArrayOf(5.0, 6.0))
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.solve(tall, doubleArrayOf(1.0, 2.0, 3.0)) }
+    }
+
+    /** solve отбраковывает рваную матрицу (первая строка правильной длины, остальные — нет). */
+    @Test fun solveRejectsRaggedMatrix() {
+        val ragged = arrayOf(
+            doubleArrayOf(1.0, 0.0, 0.0),
+            doubleArrayOf(0.0, 1.0),
+            doubleArrayOf(0.0, 0.0, 1.0),
+        )
+        val e = assertFailsWith<IllegalArgumentException> {
+            LinearAlgebra.solve(ragged, doubleArrayOf(1.0, 1.0, 1.0))
+        }
+        assertTrue(e.message!!.contains("1"), "сообщение должно указывать номер строки: ${e.message}")
+    }
+
+    /** maxAsymmetry определён только для квадратной A: индексация a[i][j] идёт по a.indices. */
+    @Test fun maxAsymmetryRejectsNonSquareAndRagged() {
+        val wide = arrayOf(doubleArrayOf(1.0, 2.0, 3.0), doubleArrayOf(4.0, 5.0, 6.0))
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.maxAsymmetry(wide) }
+        val ragged = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0))
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.maxAsymmetry(ragged) }
+        assertFailsWith<IllegalArgumentException> { LinearAlgebra.maxAsymmetry(emptyArray()) }
+    }
+
     /** Регресс #6: валидные операции продолжают работать после добавления guard. */
     @Test fun validOperationsStillWork() {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0))

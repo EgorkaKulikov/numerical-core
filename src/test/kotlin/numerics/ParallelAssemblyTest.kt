@@ -5,6 +5,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -60,6 +61,33 @@ class ParallelAssemblyTest {
                 DoubleArray(cols) { j -> cell(i, j, cols) }
             }
             assertEq(expected, actual)
+        }
+    }
+
+    /**
+     * assembleRows отбраковывает строку неверной длины — иначе собралась бы рваная
+     * «матрица», и ошибка всплыла бы позже в линейной алгебре. Проверяем ОБА режима:
+     * в параллельном IntStream прокидывает исключение задачи вызывающему потоку как есть.
+     */
+    @Test
+    fun assembleRowsRejectsRaggedRow() {
+        val saved = ParallelAssembly.parallelEnabled
+        try {
+            for (parallel in listOf(false, true)) {
+                ParallelAssembly.parallelEnabled = parallel
+                val e = assertFailsWith<IllegalArgumentException>("parallel=$parallel") {
+                    // строка 3 на один элемент короче обявленного cols
+                    ParallelAssembly.assembleRows(8, 5) { i ->
+                        DoubleArray(if (i == 3) 4 else 5) { j -> cell(i, j, 5) }
+                    }
+                }
+                assertTrue(
+                    e.message!!.contains("assembleRows"),
+                    "parallel=$parallel: ожидалось сообщение assembleRows, получено ${e.message}",
+                )
+            }
+        } finally {
+            ParallelAssembly.parallelEnabled = saved
         }
     }
 }

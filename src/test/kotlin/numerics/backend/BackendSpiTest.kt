@@ -61,11 +61,86 @@ class BackendSpiTest {
         }
     }
 
-    /** На этой машине нативный multik/OpenBLAS доступен и выбран по умолчанию. */
+    /**
+     * На этой машине нативный multik/OpenBLAS доступен — и именно он выбирается
+     * автоматически (без явного `-Dnumerics.backend`).
+     *
+     * Смысл теста сохранён, но он больше НЕ требует `Backends.active == MultikCpuBackend`:
+     * фаст-набор обязан прогоняться НА ОБОИХ бэкендах (в том числе с
+     * `-Dnumerics.backend=reference`), а жёсткая проверка активного бэкенда это
+     * блокировала. Проверяется два факта: (1) нативная библиотека реально грузится;
+     * (2) авто-выбор (requested = null) предпочитает его reference-бэкенду.
+     */
     @Test
     fun multikCpuBackendIsAvailableHere() {
         assertTrue(MultikCpuBackend.isAvailable(), "MultikCpuBackend должен быть доступен на этой машине")
-        assertEquals(MultikCpuBackend, Backends.active, "По умолчанию активен multik CPU бэкенд")
+        assertEquals(
+            MultikCpuBackend,
+            Backends.select(requested = null),
+            "При авто-выборе на этой машине должен выигрывать multik CPU бэкенд"
+        )
+    }
+
+    /**
+     * Активный бэкенд соответствует запрошенному через `-Dnumerics.backend`
+     * (а при отсутствии свойства — результату авто-выбора).
+     *
+     * Именно этот тест ловит молчаливую подмену бэкенда в реальном прогоне.
+     */
+    @Test
+    fun activeBackendMatchesRequestedProperty() {
+        val requested = System.getProperty("numerics.backend")?.trim()?.lowercase()
+        // НЕИЗВЕСТНОЕ имя — НЕ то же самое, что «свойство не задано»: по контракту
+        // [Backends.initial] обязан бросить, а не вернуть авто-выбор. Сравнение через
+        // assertEquals в этой ветке ложно диагностировало бы КОРРЕКТНОЕ поведение
+        // как падение (прогон с -Dnumerics.backend=nosuchbackend).
+        val known = requested == null || requested.isEmpty() ||
+            requested == "multik" || requested == "reference"
+        if (!known) {
+            val ex = assertFailsWith<IllegalStateException> { Backends.initial }
+            assertTrue(
+                ex.message!!.contains("неизвестный бэкенд"),
+                "Сообщение должно называть причину: ${ex.message}"
+            )
+            return
+        }
+        val expected = when (requested) {
+            "multik" -> MultikCpuBackend
+            "reference" -> ReferenceBackend
+            else -> Backends.select(requested = null)
+        }
+        assertEquals(expected, Backends.initial, "Активный бэкенд расходится с запрошенным")
+    }
+
+    /**
+     * Д1: ПРИ ЯВНО ЗАПРОШЕННОМ и НЕДОСТУПНОМ бэкенде — ошибка, а НЕ молчаливый
+     * откат на reference: подмена бэкенда меняет численные результаты (на задачах
+     * первого рода — до процентов), и пользователь должен узнать об этом сразу.
+     */
+    @Test
+    fun explicitlyRequestedUnavailableBackendFailsLoudly() {
+        val ex = assertFailsWith<IllegalStateException> {
+            Backends.select(requested = "multik", isAvailable = { it !== MultikCpuBackend })
+        }
+        assertTrue(
+            ex.message!!.contains("недоступен"),
+            "Сообщение должно объяснять недоступность: ${ex.message}"
+        )
+    }
+
+    /** Неизвестное имя бэкенда тоже не должно игнорироваться молча. */
+    @Test
+    fun unknownRequestedBackendFailsLoudly() {
+        assertFailsWith<IllegalStateException> { Backends.select(requested = "cuda") }
+    }
+
+    /** Откат ПРИ ОТСУТСТВИИ свойства сохранён: там он — гарантия переносимости. */
+    @Test
+    fun autoSelectionStillFallsBackWhenNothingRequested() {
+        assertEquals(
+            ReferenceBackend,
+            Backends.select(requested = null, isAvailable = { it !== MultikCpuBackend }),
+        )
     }
 
     /** Чистый JVM эталонный бэкенд доступен всегда. */
@@ -104,7 +179,9 @@ class BackendSpiTest {
             val x = LinearAlgebra.solve(a, b)
             assertVecEq(doubleArrayOf(1.0, 2.0), x)
         } finally {
-            Backends.use(MultikCpuBackend)
+            // Возвращаем ИМЕННО тот бэкенд, с которым запущен прогон, а не жёстко multik:
+            // иначе прогон с -Dnumerics.backend=reference «протекал бы» в последующие тесты.
+            Backends.reset()
         }
     }
 

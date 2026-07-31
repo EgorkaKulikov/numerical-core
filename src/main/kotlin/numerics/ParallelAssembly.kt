@@ -35,15 +35,32 @@ object ParallelAssembly {
      * одной задачей, операция свободна от гонок данных. При
      * [parallelEnabled]`=true` строки вычисляются параллельно, иначе —
      * последовательным циклом (одинаковый результат).
+     *
+     * Массив-накопитель создаётся ПУСТЫМ ([arrayOfNulls]): строки приходят готовыми из
+     * [rowFn], поэтому предварительное `Array(rows) { DoubleArray(cols) }` выделяло бы
+     * rows*cols чисел лишь для того, чтобы тут же их выбросить присваиванием — а это
+     * горячий путь сборки матриц M/M2. Длина каждой строки проверяется: иначе «матрица»
+     * могла бы молча получиться рваной, и ошибка проявилась бы много позже, в линейной
+     * алгебре, уже без связи с причиной.
+     *
+     * @throws IllegalArgumentException если [rowFn] вернула строку длины, отличной от [cols].
      */
     fun assembleRows(rows: Int, cols: Int, rowFn: (Int) -> DoubleArray): Array<DoubleArray> {
-        val result = Array(rows) { DoubleArray(cols) }
-        if (parallelEnabled) {
-            IntStream.range(0, rows).parallel().forEach { i -> result[i] = rowFn(i) }
-        } else {
-            for (i in 0 until rows) result[i] = rowFn(i)
+        val result = arrayOfNulls<DoubleArray>(rows)
+        val body: (Int) -> Unit = { i ->
+            val row = rowFn(i)
+            require(row.size == cols) { "assembleRows: строка $i длины ${row.size}, ожидалось $cols" }
+            result[i] = row
         }
-        return result
+        if (parallelEnabled) {
+            IntStream.range(0, rows).parallel().forEach { i -> body(i) }
+        } else {
+            for (i in 0 until rows) body(i)
+        }
+        // Каждый индекс 0..rows-1 записан ровно один раз (иначе сработал бы require выше и
+        // управление сюда не дошло), поэтому null-ов в массиве не остаётся.
+        @Suppress("UNCHECKED_CAST")
+        return result as Array<DoubleArray>
     }
 
     /**
