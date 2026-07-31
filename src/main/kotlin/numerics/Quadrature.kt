@@ -66,7 +66,7 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
      *  - `CollocationCore.init` (раньше было внутри `bMatrix`, то есть НА КАЖДОЙ итерации
      *    Ньютона и Гаусса–Ньютона — две лишние аллокации на итерацию; исправлено);
      *  - `VolterraOperator` — инициализаторы полей `refNodes`/`refWeights`;
-     *  - `FirstKindSolver.diagonalCheckPoints` — один вызов за построение решателя.
+     *  - `VolterraFirstKindSolver.diagonalCheckPoints` — один вызов за построение решателя.
      *
      * В горячих циклах читаются УЖЕ полученные один раз локальные ссылки, а не этот
      * метод. При добавлении нового вызова сначала убедитесь, что он не в цикле.
