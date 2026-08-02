@@ -154,14 +154,14 @@ class LinearAlgebraVsReferenceTest {
                 doubleArrayOf(2.0 * scale, 4.0 * scale),
             )
             val b = doubleArrayOf(1.0 * scale, 3.0 * scale)
-            assertFailsWith<IllegalStateException>("scale=$scale, активен ${Backends.active.name}") {
+            assertFailsWith<IllegalStateException>("scale=$scale, бэкенд ${Backends.default().name}") {
                 LinearAlgebra.solve(a, b)
             }
         }
         // (б) Вырождение поворотом: diag(1, 0) в базисе, повёрнутом на 45 градусов —
         // ни один элемент матрицы не мал, а сама она вырождена.
         val rotated = arrayOf(doubleArrayOf(0.5, 0.5), doubleArrayOf(0.5, 0.5))
-        assertFailsWith<IllegalStateException>("активен ${Backends.active.name}") {
+        assertFailsWith<IllegalStateException>("бэкенд ${Backends.default().name}") {
             LinearAlgebra.solve(rotated, doubleArrayOf(1.0, 0.0))
         }
         // (в) Вырождение в большем размере: вторая строка — РОВНО удвоенная первая.
@@ -172,7 +172,7 @@ class LinearAlgebraVsReferenceTest {
             doubleArrayOf(2.0, 4.0, 8.0),
             doubleArrayOf(1.0, 4.0, 16.0),
         )
-        assertFailsWith<IllegalStateException>("активен ${Backends.active.name}") {
+        assertFailsWith<IllegalStateException>("бэкенд ${Backends.default().name}") {
             LinearAlgebra.solve(rank2, doubleArrayOf(1.0, 3.0, 1.0))
         }
     }

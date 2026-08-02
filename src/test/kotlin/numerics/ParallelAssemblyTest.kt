@@ -71,23 +71,17 @@ class ParallelAssemblyTest {
      */
     @Test
     fun assembleRowsRejectsRaggedRow() {
-        val saved = ParallelAssembly.parallelEnabled
-        try {
-            for (parallel in listOf(false, true)) {
-                ParallelAssembly.parallelEnabled = parallel
-                val e = assertFailsWith<IllegalArgumentException>("parallel=$parallel") {
-                    // строка 3 на один элемент короче обявленного cols
-                    ParallelAssembly.assembleRows(8, 5) { i ->
-                        DoubleArray(if (i == 3) 4 else 5) { j -> cell(i, j, 5) }
-                    }
+        for (parallel in listOf(false, true)) {
+            val e = assertFailsWith<IllegalArgumentException>("parallel=$parallel") {
+                // строка 3 на один элемент короче обявленного cols
+                ParallelAssembly.assembleRows(8, 5, parallel) { i ->
+                    DoubleArray(if (i == 3) 4 else 5) { j -> cell(i, j, 5) }
                 }
-                assertTrue(
-                    e.message!!.contains("assembleRows"),
-                    "parallel=$parallel: ожидалось сообщение assembleRows, получено ${e.message}",
-                )
             }
-        } finally {
-            ParallelAssembly.parallelEnabled = saved
+            assertTrue(
+                e.message!!.contains("assembleRows"),
+                "parallel=$parallel: ожидалось сообщение assembleRows, получено ${e.message}",
+            )
         }
     }
 }

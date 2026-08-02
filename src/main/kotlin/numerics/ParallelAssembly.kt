@@ -15,26 +15,15 @@ import java.util.stream.IntStream
 object ParallelAssembly {
 
     /**
-     * Переключатель параллельной сборки (хук для тестов/бенчмарков).
-     *
-     * По умолчанию `true` — продакшен-поведение не меняется (параллельная
-     * сборка через `IntStream.parallel()`). Если выставить `false`, методы
-     * [assembleRows]/[assembleMatrix] выполняют ОБЫЧНЫЙ последовательный цикл
-     * по тем же [rowFn]/[cellFn]. Это позволяет бенчмарку измерить ускорение
-     * seq/par на ОДНОМ И ТОМ ЖЕ коде, не дублируя логику ячеек. Флаг помечен
-     * `@Volatile` для безопасной видимости между потоками.
-     */
-    @Volatile
-    var parallelEnabled: Boolean = true
-
-    /**
      * Собирает матрицу [rows] x [cols], вычисляя каждую строку через [rowFn].
      *
      * Для каждого индекса строки `i` вызывается [rowFn], результат которой
      * (длины [cols]) кладётся в строку `i`. Так как каждый индекс пишется ровно
-     * одной задачей, операция свободна от гонок данных. При
-     * [parallelEnabled]`=true` строки вычисляются параллельно, иначе —
-     * последовательным циклом (одинаковый результат).
+     * одной задачей, операция свободна от гонок данных. При [parallel]`=true`
+     * строки вычисляются параллельно, иначе — ОБЫЧНЫМ последовательным циклом по
+     * тому же [rowFn] (побитово одинаковый результат). Режим передаётся
+     * ПАРАМЕТРОМ, а не глобальным переключателем: иначе бенчмарк, меряющий
+     * seq/par, менял бы поведение чужого кода в той же JVM.
      *
      * Массив-накопитель создаётся ПУСТЫМ ([arrayOfNulls]): строки приходят готовыми из
      * [rowFn], поэтому предварительное `Array(rows) { DoubleArray(cols) }` выделяло бы
@@ -45,14 +34,19 @@ object ParallelAssembly {
      *
      * @throws IllegalArgumentException если [rowFn] вернула строку длины, отличной от [cols].
      */
-    fun assembleRows(rows: Int, cols: Int, rowFn: (Int) -> DoubleArray): Array<DoubleArray> {
+    fun assembleRows(
+        rows: Int,
+        cols: Int,
+        parallel: Boolean = true,
+        rowFn: (Int) -> DoubleArray,
+    ): Array<DoubleArray> {
         val result = arrayOfNulls<DoubleArray>(rows)
         val body: (Int) -> Unit = { i ->
             val row = rowFn(i)
             require(row.size == cols) { "assembleRows: строка $i длины ${row.size}, ожидалось $cols" }
             result[i] = row
         }
-        if (parallelEnabled) {
+        if (parallel) {
             IntStream.range(0, rows).parallel().forEach { i -> body(i) }
         } else {
             for (i in 0 until rows) body(i)
@@ -69,16 +63,21 @@ object ParallelAssembly {
      *
      * Каждая строка обрабатывается одной задачей и заполняется вызовами
      * [cellFn] для всех столбцов; разные задачи пишут в разные строки, поэтому
-     * гонок данных нет. При [parallelEnabled]`=true` строки идут параллельно,
-     * иначе — последовательным циклом (одинаковый результат).
+     * гонок данных нет. При [parallel]`=true` строки идут параллельно, иначе —
+     * последовательным циклом (побитово одинаковый результат).
      */
-    fun assembleMatrix(rows: Int, cols: Int, cellFn: (Int, Int) -> Double): Array<DoubleArray> {
+    fun assembleMatrix(
+        rows: Int,
+        cols: Int,
+        parallel: Boolean = true,
+        cellFn: (Int, Int) -> Double,
+    ): Array<DoubleArray> {
         val result = Array(rows) { DoubleArray(cols) }
         val body: (Int) -> Unit = { i ->
             val row = result[i]
             for (j in 0 until cols) row[j] = cellFn(i, j)
         }
-        if (parallelEnabled) {
+        if (parallel) {
             IntStream.range(0, rows).parallel().forEach { i -> body(i) }
         } else {
             for (i in 0 until rows) body(i)

@@ -1,6 +1,7 @@
 package numerics.backend
 
 import numerics.LinearAlgebra
+import numerics.NumericsContext
 import org.junit.jupiter.api.Tag
 import kotlin.random.Random
 import kotlin.test.Test
@@ -11,10 +12,13 @@ import kotlin.test.assertTrue
 /**
  * Тесты подключаемого SPI линейной алгебры [LinAlgBackend]/[Backends].
  *
- * Проверяют реальную доступность бэкендов, выбор по умолчанию, согласие двух
- * бэкендов на хорошо обусловленных входах, делегирование фасада активному
- * бэкенду и сохранение семантики вырожденности. Каждый тест восстанавливает
- * бэкенд по умолчанию в finally, чтобы порядок тестов не мог «протечь».
+ * Проверяют реальную доступность бэкендов, выбор по умолчанию ([Backends.default]),
+ * согласие двух бэкендов на хорошо обусловленных входах, делегирование фасада
+ * ЯВНО переданному бэкенду и сохранение семантики вырожденности.
+ *
+ * Ни один тест ничего НЕ ВОССТАНАВЛИВАЕТ в `finally` и не может «протечь» в соседний:
+ * глобального мутируемого состояния больше нет — бэкенд передаётся параметром,
+ * и восстанавливать нечего. Именно ради этого свойства убирались `Backends.use/reset`.
  */
 @Tag("fast")
 class BackendSpiTest {
@@ -65,7 +69,7 @@ class BackendSpiTest {
      * На этой машине нативный multik/OpenBLAS доступен — и именно он выбирается
      * автоматически (без явного `-Dnumerics.backend`).
      *
-     * Смысл теста сохранён, но он больше НЕ требует `Backends.active == MultikCpuBackend`:
+     * Смысл теста сохранён, но он больше НЕ требует `Backends.default() == MultikCpuBackend`:
      * фаст-набор обязан прогоняться НА ОБОИХ бэкендах (в том числе с
      * `-Dnumerics.backend=reference`), а жёсткая проверка активного бэкенда это
      * блокировала. Проверяется два факта: (1) нативная библиотека реально грузится;
@@ -82,22 +86,22 @@ class BackendSpiTest {
     }
 
     /**
-     * Активный бэкенд соответствует запрошенному через `-Dnumerics.backend`
+     * Бэкенд по умолчанию соответствует запрошенному через `-Dnumerics.backend`
      * (а при отсутствии свойства — результату авто-выбора).
      *
      * Именно этот тест ловит молчаливую подмену бэкенда в реальном прогоне.
      */
     @Test
-    fun activeBackendMatchesRequestedProperty() {
+    fun defaultBackendMatchesRequestedProperty() {
         val requested = System.getProperty("numerics.backend")?.trim()?.lowercase()
         // НЕИЗВЕСТНОЕ имя — НЕ то же самое, что «свойство не задано»: по контракту
-        // [Backends.initial] обязан бросить, а не вернуть авто-выбор. Сравнение через
+        // [Backends.default] обязан бросить, а не вернуть авто-выбор. Сравнение через
         // assertEquals в этой ветке ложно диагностировало бы КОРРЕКТНОЕ поведение
         // как падение (прогон с -Dnumerics.backend=nosuchbackend).
         val known = requested == null || requested.isEmpty() ||
             requested == "multik" || requested == "reference"
         if (!known) {
-            val ex = assertFailsWith<IllegalStateException> { Backends.initial }
+            val ex = assertFailsWith<IllegalStateException> { Backends.default() }
             assertTrue(
                 ex.message!!.contains("неизвестный бэкенд"),
                 "Сообщение должно называть причину: ${ex.message}"
@@ -109,7 +113,7 @@ class BackendSpiTest {
             "reference" -> ReferenceBackend
             else -> Backends.select(requested = null)
         }
-        assertEquals(expected, Backends.initial, "Активный бэкенд расходится с запрошенным")
+        assertEquals(expected, Backends.default(), "Бэкенд по умолчанию расходится с запрошенным")
     }
 
     /**
@@ -168,21 +172,26 @@ class BackendSpiTest {
         }
     }
 
-    /** Фасад LinearAlgebra делегирует активному бэкенду, переключение работает. */
+    /**
+     * Фасад LinearAlgebra считает ТЕМ бэкендом, который ему передали ЯВНО.
+     *
+     * Раньше здесь подменялось глобальное состояние (`Backends.use`) с восстановлением
+     * в finally, и корректность соседних тестов зависела от того, выполнился ли finally.
+     * Теперь бэкенд — параметр, и восстанавливать нечего.
+     */
     @Test
-    fun facadeFollowsActiveBackend() {
-        try {
-            Backends.use(ReferenceBackend)
-            // Известная система: [[2,0],[0,4]] x = [2,8] -> x = [1,2].
-            val a = arrayOf(doubleArrayOf(2.0, 0.0), doubleArrayOf(0.0, 4.0))
-            val b = doubleArrayOf(2.0, 8.0)
-            val x = LinearAlgebra.solve(a, b)
-            assertVecEq(doubleArrayOf(1.0, 2.0), x)
-        } finally {
-            // Возвращаем ИМЕННО тот бэкенд, с которым запущен прогон, а не жёстко multik:
-            // иначе прогон с -Dnumerics.backend=reference «протекал бы» в последующие тесты.
-            Backends.reset()
+    fun facadeUsesExplicitlyPassedBackend() {
+        // Известная система: [[2,0],[0,4]] x = [2,8] -> x = [1,2].
+        val a = arrayOf(doubleArrayOf(2.0, 0.0), doubleArrayOf(0.0, 4.0))
+        val b = doubleArrayOf(2.0, 8.0)
+        val expected = doubleArrayOf(1.0, 2.0)
+        for (backend in listOf<LinAlgBackend>(ReferenceBackend, MultikCpuBackend)) {
+            assertVecEq(expected, LinearAlgebra.solve(a, b, backend))
+            assertVecEq(expected, LinearAlgebra.matVec(LinearAlgebra.identity(2), expected, backend))
         }
+        // Контекст по умолчанию несёт ровно стартовый бэкенд процесса.
+        assertEquals(Backends.default(), NumericsContext.default().backend)
+        assertTrue(NumericsContext.default().parallel, "По умолчанию сборка параллельная")
     }
 
     /** Оба бэкенда бросают IllegalStateException на вырожденной матрице. */

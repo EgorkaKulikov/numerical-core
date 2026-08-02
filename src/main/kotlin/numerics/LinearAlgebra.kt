@@ -2,16 +2,21 @@ package numerics
 
 import kotlin.math.abs
 import numerics.backend.Backends
+import numerics.backend.LinAlgBackend
 
 /**
  * Линейная алгебра над [Array]<[DoubleArray]> — тонкий фасад над подключаемым
  * бэкендом (SPI).
  *
  * Публичный API стабилен (массивы Kotlin) и не зависит от выбранной реализации.
- * Тяжёлые операции (умножения и решение СЛАУ) делегируются активному бэкенду
- * [numerics.backend.Backends.active]; по умолчанию это нативный
- * multik/OpenBLAS-бэкенд, с автоматическим откатом на чистый JVM при отсутствии
- * нативной библиотеки. Дешёвые скалярные/служебные операции (нормы, проверка
+ * Тяжёлые операции (умножения и решение СЛАУ) делегируются бэкенду, переданному
+ * ЯВНО последним параметром; его значение по умолчанию —
+ * [numerics.backend.Backends.default] (нативный multik/OpenBLAS-бэкенд, с
+ * автоматическим откатом на чистый JVM при отсутствии нативной библиотеки).
+ * Параметр, а не глобальный переключатель: вызов больше не зависит от того, что
+ * успел выставить сосед по JVM. Обращение к [numerics.backend.Backends.default]
+ * не создаёт объектов, поэтому дефолт безопасен в горячем пути.
+ * Дешёвые скалярные/служебные операции (нормы, проверка
  * симметрии, разложение Холецкого как health-check, конструкторы) реализованы
  * прямо здесь. Эталоном корректности служит [ReferenceLinearAlgebra].
  *
@@ -32,41 +37,62 @@ object LinearAlgebra {
     // --- Тяжёлые операции: делегирование активному бэкенду --------------------
 
     /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
-    fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray {
+    fun matVec(
+        a: Array<DoubleArray>,
+        x: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): DoubleArray {
         require(a.isNotEmpty() && a[0].isNotEmpty()) { "matVec: пустая матрица A" }
         require(a[0].size == x.size) { "matVec: несогласованные размеры A(${a.size}x${a[0].size}) и x(${x.size})" }
-        return Backends.active.matVec(a, x)
+        return backend.matVec(a, x)
     }
 
     /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
-    fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray {
+    fun matTransVec(
+        a: Array<DoubleArray>,
+        y: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): DoubleArray {
         require(a.isNotEmpty() && a[0].isNotEmpty()) { "matTransVec: пустая матрица A" }
         require(a.size == y.size) { "matTransVec: несогласованные размеры A(${a.size} строк) и y(${y.size})" }
-        return Backends.active.matTransVec(a, y)
+        return backend.matTransVec(a, y)
     }
 
     /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
-    fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> {
+    fun matMat(
+        a: Array<DoubleArray>,
+        b: Array<DoubleArray>,
+        backend: LinAlgBackend = Backends.default(),
+    ): Array<DoubleArray> {
         require(a.isNotEmpty() && a[0].isNotEmpty()) { "matMat: пустая матрица A" }
         require(b.isNotEmpty() && b[0].isNotEmpty()) { "matMat: пустая матрица B" }
         require(a[0].size == b.size) { "matMat: несогласованные размеры A(${a.size}x${a[0].size}) и B(${b.size}x${b[0].size})" }
-        return Backends.active.matMat(a, b)
+        return backend.matMat(a, b)
     }
 
     /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
-    fun atWa(a: Array<DoubleArray>, w: DoubleArray): Array<DoubleArray> {
+    fun atWa(
+        a: Array<DoubleArray>,
+        w: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): Array<DoubleArray> {
         require(a.isNotEmpty() && a[0].isNotEmpty()) { "atWa: пустая матрица A" }
         require(a.size == w.size) { "atWa: несогласованные размеры A(${a.size} строк) и w(${w.size})" }
-        return Backends.active.atWa(a, w)
+        return backend.atWa(a, w)
     }
 
     /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
-    fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> {
+    fun addScaled(
+        a: Array<DoubleArray>,
+        b: Array<DoubleArray>,
+        s: Double,
+        backend: LinAlgBackend = Backends.default(),
+    ): Array<DoubleArray> {
         require(a.size == b.size) { "addScaled: несогласованное число строк A(${a.size}) и B(${b.size})" }
         require(a.isEmpty() || a[0].size == b[0].size) {
             "addScaled: несогласованное число столбцов A(${a[0].size}) и B(${b[0].size})"
         }
-        return Backends.active.addScaled(a, b, s)
+        return backend.addScaled(a, b, s)
     }
 
     /**
@@ -107,7 +133,7 @@ object LinearAlgebra {
     const val SINGULARITY_RELATIVE_TOLERANCE = 1e-10
 
     /**
-     * Решение плотной СЛАУ A x = b через активный бэкенд.
+     * Решение плотной СЛАУ A x = b через переданный бэкенд.
      *
      * Входные A и b не изменяются. ЕДИНАЯ для всех бэкендов семантика
      * вырожденности обеспечивается ЗДЕСЬ, в фасаде, а не в бэкенде: бэкенды
@@ -119,7 +145,11 @@ object LinearAlgebra {
      * @throws IllegalStateException при вырожденности: нечисловом решении либо
      *         невязке, несовместимой с машинной точностью.
      */
-    fun solve(a: Array<DoubleArray>, b: DoubleArray): DoubleArray {
+    fun solve(
+        a: Array<DoubleArray>,
+        b: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): DoubleArray {
         require(a.isNotEmpty() && a[0].isNotEmpty()) { "solve: пустая матрица A" }
         // Квадратность и прямоугольность: бэкенды неявно исходят из n x n и одинаковой
         // длины строк; рваный вход дал бы либо AIOOBE в глубине, либо тихо неверное решение.
@@ -130,7 +160,7 @@ object LinearAlgebra {
             "solve: рваная матрица A — строка $i длины ${a[i].size}, ожидалось ${a.size}"
         }
         require(a.size == b.size) { "solve: несогласованные размеры A(${a.size} строк) и b(${b.size})" }
-        val x = Backends.active.solve(a, b)
+        val x = backend.solve(a, b)
         checkSolution(a, b, x)
         return x
     }
