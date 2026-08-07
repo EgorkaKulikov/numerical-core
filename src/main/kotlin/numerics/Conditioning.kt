@@ -2,6 +2,7 @@ package numerics
 
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.log10
 import kotlin.math.sqrt
 
 // ============================================================================
@@ -38,6 +39,88 @@ data class ConditionEstimate(
 
     /** [condInf], если оценка достоверна, иначе `null` — чтобы недостоверное число нельзя было использовать по невнимательности. */
     fun valueOrNull(): Double? = if (isReliable) condInf else null
+}
+
+/**
+ * Оценка ОТНОСИТЕЛЬНОЙ ПРЯМОЙ ошибки решения СЛАУ — вместе с суждением о том,
+ * существует ли она вообще и можно ли ей верить.
+ *
+ * ОБРАТНАЯ И ПРЯМАЯ ОШИБКА — РАЗНЫЕ ВЕЛИЧИНЫ. Обратная ошибка отвечает на вопрос
+ * «какую систему алгоритм решил точно»: `ω = ‖Ax − b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)`.
+ * У LU с частичным выбором она мала ВСЕГДА, в том числе на численно вырожденной
+ * матрице (измерено 3.97e-16); ровно её контролирует постпроверка решения по
+ * порогу [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE], и по построению та ловит
+ * только откровенный мусор. Прямая ошибка отвечает на ДРУГОЙ вопрос — насколько
+ * возвращённый `x` отличается от истинного решения `x*` — и ограничивается
+ * произведением `‖x − x*‖∞ / ‖x*‖∞ <= cond∞(A) · ω`. При `cond∞ ~ 2.6e10` и
+ * `ω ~ 1e-16` верных десятичных разрядов остаётся около шести, а при
+ * `cond∞ ~ 1/ε ~ 4.5e15` — ни одного. МАЛАЯ ОБРАТНАЯ ОШИБКА НЕ ОЗНАЧАЕТ, ЧТО
+ * РЕЗУЛЬТАТ ТОЧЕН.
+ *
+ * ЗАЧЕМ ЗАКРЫТЫЙ ТИП, А НЕ `Double`. Множитель `cond∞(A)` сам вычисляется
+ * численно и на почти вырожденных матрицах недостоверен (граница применимости —
+ * в KDoc [Conditioning]). Вернуть в этом случае число значило бы выдать шум за
+ * оценку. Поэтому три режима разделены КОНСТРУКТОРАМИ, и получить из них число
+ * можно только явным сопоставлением с образцом либо через [relativeBoundOrNull],
+ * который возвращает `null` там, где числа нет.
+ */
+sealed interface ForwardError {
+    /**
+     * Измеренная относительная ОБРАТНАЯ ошибка — доступна во всех режимах: она
+     * именно измеряется (см. [Conditioning.relativeBackwardError]), а не
+     * оценивается, и потому достоверна всегда.
+     */
+    val backwardError: Double
+
+    /**
+     * Оценка существует и достоверна: `‖x − x*‖∞ / ‖x*‖∞ <= [relativeBound]`.
+     *
+     * @property cond использованное число обусловленности.
+     * @property relativeBound произведение `cond · backwardError`.
+     */
+    data class Bounded(
+        override val backwardError: Double,
+        val cond: Double,
+        val relativeBound: Double,
+    ) : ForwardError
+
+    /**
+     * Конечной границы НЕТ ВОВСЕ: матрица численно вырождена — спектральная
+     * оценка даёт `σ_min = 0` либо обращение не удалось.
+     *
+     * Содержательно отличается от [Unreliable]: там оценка `cond` существует, но
+     * ей нельзя верить, а здесь конечного числа обусловленности у матрицы нет.
+     */
+    data class NoFiniteBound(override val backwardError: Double) : ForwardError
+
+    /**
+     * Оценка `cond` конечна, но недостоверна ([ConditionEstimate.isReliable]
+     * равно `false`), поэтому границы прямой ошибки не существует как измерения.
+     *
+     * @property condition сама недостоверная оценка — для печати с пометкой и
+     *   для разбора причины: невязка обращения лежит в ней же.
+     */
+    data class Unreliable(
+        override val backwardError: Double,
+        val condition: ConditionEstimate,
+    ) : ForwardError
+
+    /** Граница прямой ошибки или `null` в режимах [NoFiniteBound] и [Unreliable]. */
+    fun relativeBoundOrNull(): Double? = (this as? Bounded)?.relativeBound
+
+    /**
+     * Сколько ДЕСЯТИЧНЫХ разрядов результата заведомо уцелело: `-log10(границы)`,
+     * обрезанное снизу нулём (граница `>= 1` означает «ни одного гарантированно
+     * верного разряда») и сверху 16 (полная мантисса double).
+     *
+     * `null` — там же, где `null` у [relativeBoundOrNull]: нет границы — нет и
+     * числа разрядов.
+     */
+    fun survivingDigitsOrNull(): Double? {
+        val bound = relativeBoundOrNull() ?: return null
+        if (bound <= 0.0) return 16.0
+        return minOf(16.0, maxOf(0.0, -log10(bound)))
+    }
 }
 
 /**
@@ -244,5 +327,116 @@ object Conditioning {
             hi = maxOf(hi, abs(v))
         }
         return if (lo == 0.0) Double.POSITIVE_INFINITY else hi / lo
+    }
+
+    // --- Прямая ошибка решения СЛАУ -----------------------------------------
+
+    /**
+     * Относительная ОБРАТНАЯ ошибка решения `A x = b`:
+     * `‖Ax − b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)`.
+     *
+     * Это РОВНО та величина, которую постпроверка [LinearAlgebra.solve] сравнивает
+     * с порогом [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE]: нормировка
+     * `max(‖A‖∞‖x‖∞, ‖b‖∞)` взята оттуда дословно — иначе в проекте появилось бы
+     * две разные «обратные ошибки» с расходящимися значениями. Обоснование самой
+     * нормировки (в частности, зачем в ней `‖b‖∞`) — в KDoc этого порога.
+     *
+     * Величина достоверна всегда: она ИЗМЕРЯЕТСЯ одним проходом по `A`, а не
+     * оценивается. Прямую (то есть интересующую пользователя) ошибку она НЕ
+     * ограничивает: множителем служит `cond∞(A)`, см. [ForwardError].
+     *
+     * Нулевой масштаб (`A = 0`, `b = 0`) даёт `0.0`: невязка там тождественно
+     * нулевая, и деление ноля на ноль здесь дало бы `NaN` вместо честного
+     * «ошибки нет».
+     */
+    fun relativeBackwardError(a: Array<DoubleArray>, b: DoubleArray, x: DoubleArray): Double {
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "relativeBackwardError: пустая матрица A" }
+        require(a.size == a[0].size) {
+            "relativeBackwardError: требуется квадратная A, получено ${a.size}x${a[0].size}"
+        }
+        require(a.size == b.size) {
+            "relativeBackwardError: несогласованные размеры A(${a.size} строк) и b(${b.size})"
+        }
+        require(a.size == x.size) {
+            "relativeBackwardError: несогласованные размеры A(${a.size} строк) и x(${x.size})"
+        }
+        val n = a.size
+        var matrixNorm = 0.0 // ‖A‖∞
+        var residual = 0.0 // ‖Ax − b‖∞
+        for (i in 0 until n) {
+            val row = a[i]
+            var rowSum = 0.0
+            var ax = 0.0
+            for (j in 0 until n) {
+                rowSum += abs(row[j])
+                ax += row[j] * x[j]
+            }
+            matrixNorm = maxOf(matrixNorm, rowSum)
+            residual = maxOf(residual, abs(ax - b[i]))
+        }
+        val scale = maxOf(matrixNorm * LinearAlgebra.normInf(x), LinearAlgebra.normInf(b))
+        return if (scale == 0.0) 0.0 else residual / scale
+    }
+
+    /**
+     * Граница относительной ПРЯМОЙ ошибки `cond∞(A) · ω` по готовой оценке
+     * обусловленности и измеренной обратной ошибке `ω`.
+     *
+     * Функция ЧИСТАЯ и ничего не вычисляет заново: она лишь переводит пару
+     * «оценка `cond` + измеренная обратная ошибка» в один из трёх режимов
+     * [ForwardError], не позволяя недостоверному `cond` превратиться в число.
+     * Смысл режимов описан в KDoc [ForwardError].
+     *
+     * @param backwardError результат [relativeBackwardError]; требуется конечным и неотрицательным.
+     */
+    fun forwardError(condition: ConditionEstimate, backwardError: Double): ForwardError {
+        require(backwardError.isFinite() && backwardError >= 0.0) {
+            "forwardError: обратная ошибка должна быть конечной и неотрицательной, получено $backwardError"
+        }
+        return when {
+            !condition.condInf.isFinite() -> ForwardError.NoFiniteBound(backwardError)
+            !condition.isReliable -> ForwardError.Unreliable(backwardError, condition)
+            else -> ForwardError.Bounded(backwardError, condition.condInf, condition.condInf * backwardError)
+        }
+    }
+
+    /**
+     * Граница относительной ПРЯМОЙ ошибки для СИММЕТРИЧНОЙ матрицы — через
+     * спектральную оценку [conditionSymmetric], а не через обращение.
+     *
+     * ЗАЧЕМ ОТДЕЛЬНЫЙ ПУТЬ. Оценка через обращение на почти вырожденной матрице
+     * сама недостоверна и даёт режим [ForwardError.Unreliable] — «числа нет,
+     * причина неизвестна». Метод вращений Якоби матрицу не обращает и на
+     * численно вырожденной матрице честно выдаёт `σ_min = 0`, поэтому здесь
+     * различаются два разных факта: «конечного числа обусловленности нет вовсе»
+     * ([ForwardError.NoFiniteBound]) и «`cond` велико, но конечно»
+     * ([ForwardError.Bounded] с большой границей). Именно так себя ведёт матрица
+     * дискретизации ядра `1/(1 + t + s)`: `σ_min` у неё РОВНО 0, тогда как оценка
+     * через обращение выдавала немонотонный шум порядка 1e16…1e19.
+     *
+     * Режим [ForwardError.Unreliable] эта функция не возвращает никогда:
+     * ортогональные преобразования не теряют достоверность так, как её теряет
+     * обращение.
+     *
+     * ЦЕНА: O(maxSweeps · n³) — дороже обращения, поэтому путь применяется
+     * осознанно и только там, где симметрия действительно есть.
+     *
+     * @throws IllegalArgumentException если матрица не симметрична (проверка
+     *   наследуется от [symmetricEigenvalues]).
+     */
+    fun forwardErrorSymmetric(
+        a: Array<DoubleArray>,
+        backwardError: Double,
+        maxSweeps: Int = 100,
+    ): ForwardError {
+        require(backwardError.isFinite() && backwardError >= 0.0) {
+            "forwardErrorSymmetric: обратная ошибка должна быть конечной и неотрицательной, получено $backwardError"
+        }
+        val cond = conditionSymmetric(a, maxSweeps)
+        return if (!cond.isFinite()) {
+            ForwardError.NoFiniteBound(backwardError)
+        } else {
+            ForwardError.Bounded(backwardError, cond, cond * backwardError)
+        }
     }
 }
