@@ -193,43 +193,76 @@ class ForwardErrorTest {
     }
 
     /**
-     * КЛЮЧЕВОЙ СЛУЧАЙ ИЗ ISSUE #10. Матрица дискретизации ядра `1/(1 + t + s)`
-     * численно вырождена: обратная ошибка решения остаётся на уровне 1e-18 —
-     * постпроверка `solve` молчит и решение возвращается как ни в чём не бывало, —
-     * тогда как прямая ошибка НЕ ограничена ничем осмысленным.
+     * КЛЮЧЕВОЙ СЛУЧАЙ ИЗ ISSUE #10, часть 1: численно вырожденная матрица
+     * дискретизации ядра `1/(1 + t + s)`. НИ ОДИН путь не имеет права вернуть
+     * маленькую границу прямой ошибки, как бы мала ни была обратная ошибка.
      *
-     * Диагностика обязана это показать, причём ОБА пути обязаны отказаться выдать
-     * маленькое число: путь через обращение помечает оценку недостоверной
-     * (измеренная невязка обращения — сотни), спектральный путь даёт границу,
-     * заведомо превышающую единицу, то есть «ни одного верного разряда».
+     * Обратная ошибка взята ФИКСИРОВАННОЙ (машинный эпсилон), а не получена
+     * из `solve`, СОЗНАТЕЛЬНО: на таком входе бэкенды ведут себя по-разному —
+     * `reference` и нативный LAPACK могут признать матрицу вырожденной на разных
+     * шагах, и оба ответа честны (см. границу применимости в KDoc
+     * [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE]). Проверяется здесь НЕ поведение
+     * бэкенда, а поведение ДИАГНОСТИКИ, и оно обязано быть одинаковым везде.
      */
-    @Test fun nearlySingularSystemHidesLossOfAccuracyFromSolve() {
+    @Test fun nearlySingularKernelMatrixNeverYieldsSmallForwardBound() {
         val n = 32
         val a = Array(n) { i -> DoubleArray(n) { j -> 1.0 / (1.0 + i.toDouble() / n + j.toDouble() / n) } }
-        val b = DoubleArray(n) { 1.0 }
+        val omega = 2.220446049250313e-16 // машинный эпсилон: лучшее, на что способен любой решатель
 
-        // Обратная ошибка мала — постпроверка solve пропускает решение без единого сигнала.
-        val x = LinearAlgebra.solve(a, b)
-        val omega = Conditioning.relativeBackwardError(a, b, x)
-        assertTrue(omega < 1e-14, "обратная ошибка обязана остаться малой, получено $omega")
-
-        // Путь через обращение: числа нет, и это сказано явно.
-        val viaInversion = LinearAlgebra.solveDiagnosed(a, b).forwardError
-        assertTrue(viaInversion is ForwardError.Unreliable, "получено $viaInversion")
-        assertNull(viaInversion.relativeBoundOrNull())
+        // Путь через обращение: числа нет — либо оценка недостоверна, либо cond бесконечен.
+        val viaInversion = Conditioning.forwardError(Conditioning.conditionInf(a), omega)
+        assertNull(viaInversion.relativeBoundOrNull(), "получено $viaInversion")
         assertNull(viaInversion.survivingDigitsOrNull())
         assertTrue(
-            viaInversion.condition.inversionResidual > Conditioning.INVERSION_RESIDUAL_TOLERANCE,
-            "невязка обращения=${viaInversion.condition.inversionResidual}",
+            viaInversion is ForwardError.Unreliable || viaInversion is ForwardError.NoFiniteBound,
+            "получено $viaInversion",
         )
 
-        // Спектральный путь: граница существует, но она больше единицы — верных разрядов нет.
-        val viaSpectrum = LinearAlgebra
-            .solveDiagnosed(a, b, source = LinearAlgebra.ConditionSource.SYMMETRIC_SPECTRUM)
-            .forwardError
+        // Спектральный путь детерминирован (Якоби не зависит от бэкенда): граница
+        // существует, но она больше единицы — верных разрядов не осталось ни одного.
+        val viaSpectrum = Conditioning.forwardErrorSymmetric(a, omega)
         assertTrue(viaSpectrum is ForwardError.Bounded, "получено $viaSpectrum")
         assertTrue(viaSpectrum.relativeBound > 1.0, "граница=${viaSpectrum.relativeBound}")
         assertEquals(0.0, viaSpectrum.survivingDigitsOrNull()!!, 0.0)
+    }
+
+    /**
+     * КЛЮЧЕВОЙ СЛУЧАЙ ИЗ ISSUE #10, часть 2: МАЛАЯ ОБРАТНАЯ ОШИБКА НЕ ОЗНАЧАЕТ
+     * ТОЧНОСТИ РЕЗУЛЬТАТА — на системе, которую решает любой бэкенд.
+     *
+     * Матрица `diag(1e-9, 1, …, 1)` невырождена и плохо обусловлена:
+     * `cond∞ = ‖1‖ · ‖1e9‖ = 1e9`. Диагональный вид выбран СОЗНАТЕЛЬНО: все
+     * величины известны аналитически и одинаковы на любом бэкенде, поэтому
+     * тест проверяет именно логику диагностики, а не арифметику конкретного LU.
+     *
+     * `solve` на такой системе молчит — и справедливо: обратная ошибка ничтожна.
+     * Но ГАРАНТИРОВАТЬ по ней точность результата нельзя: стоит обратной
+     * ошибке оказаться на уровне машинного эпсилона (лучшее, на что вообще
+     * способен любой решатель), как множитель `cond∞ = 1e9` съедает девять
+     * десятичных разрядов из шестнадцати. Именно этот множитель и был
+     * невидим на выходе `solve`.
+     */
+    @Test fun smallBackwardErrorDoesNotImplyAccurateResult() {
+        val n = 6
+        val a = Array(n) { i -> DoubleArray(n) { j -> if (i == j) (if (i == 0) 1e-9 else 1.0) else 0.0 } }
+        val b = DoubleArray(n) { 1.0 }
+
+        val d = LinearAlgebra.solveDiagnosed(a, b)
+        val fe = d.forwardError
+        // solve молчит: обратная ошибка ничтожна — система решена обратно устойчиво.
+        assertTrue(fe.backwardError < 1e-14, "ω=${fe.backwardError}")
+
+        // Оценка cond достоверна (диагональная матрица обращается точно) и велика.
+        assertTrue(fe is ForwardError.Bounded, "получено $fe")
+        assertEquals(1e9, fe.cond, 1e-3)
+
+        // СУТЬ: при ЛЮБОЙ реалистичной обратной ошибке множитель cond съедает 9 разрядов.
+        val atMachineEpsilon = Conditioning.forwardError(
+            ConditionEstimate(fe.cond, 0.0, Conditioning.INVERSION_RESIDUAL_TOLERANCE),
+            2.220446049250313e-16,
+        )
+        val digits = atMachineEpsilon.survivingDigitsOrNull()!!
+        assertTrue(digits in 6.0..8.0, "гарантированных разрядов $digits, ожидалось около 7 вместо 16")
     }
 
     /**
