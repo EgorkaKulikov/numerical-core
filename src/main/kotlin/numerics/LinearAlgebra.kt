@@ -142,6 +142,13 @@ object LinearAlgebra {
      * любого из них, — числовой результат и малая невязка
      * (см. [SINGULARITY_RELATIVE_TOLERANCE]).
      *
+     * ЧТО ЭТОТ МЕТОД НЕ ОБЕЩАЕТ. Постпроверка контролирует ОБРАТНУЮ ошибку,
+     * а не точность результата: на численно вырожденной матрице невязка остаётся
+     * малой (измерено 3.97e-16), тогда как ПРЯМАЯ ошибка растёт как `cond(A) · ε`
+     * и может съесть все значащие цифры. Здесь эта величина не измеряется СОЗНАТЕЛЬНО
+     * (метод лежит на горячем пути сборки матриц); когда она нужна —
+     * [solveDiagnosed], разбор различия двух ошибок — [ForwardError].
+     *
      * @throws IllegalStateException при вырожденности: нечисловом решении либо
      *         невязке, несовместимой с машинной точностью.
      */
@@ -163,6 +170,91 @@ object LinearAlgebra {
         val x = backend.solve(a, b)
         checkSolution(a, b, x)
         return x
+    }
+
+    /**
+     * Источник оценки `cond`, по которой [solveDiagnosed] строит границу прямой ошибки.
+     *
+     * Перечисление, а не булев флаг: выбор здесь НЕ оптимизация, а разные
+     * математические гарантии — и разные требования к входу.
+     */
+    enum class ConditionSource {
+        /**
+         * Через явное обращение ([Conditioning.conditionInf]): O(n³), без требований к `A`.
+         * На почти вырожденной матрице сама оценка теряет достоверность, и результатом
+         * становится [ForwardError.Unreliable] — честное «числа нет».
+         */
+        INVERSION,
+
+        /**
+         * Через спектр методом вращений Якоби ([Conditioning.conditionSymmetric]):
+         * требует СИММЕТРИЧНОЙ `A` и дороже, но различает «конечного `cond`
+         * нет вовсе» (`σ_min = 0`, режим [ForwardError.NoFiniteBound]) и «`cond` велико,
+         * но конечно» — различение, недоступное пути [INVERSION].
+         */
+        SYMMETRIC_SPECTRUM,
+    }
+
+    /**
+     * Решение СЛАУ вместе с оценкой его ПРЯМОЙ ошибки.
+     *
+     * @property x тот же вектор, что вернул бы [LinearAlgebra.solve] на тех же входных данных
+     *   — диагностика НЕ меняет вычислений и не уточняет решение.
+     * @property forwardError граница относительной прямой ошибки либо явное свидетельство
+     *   того, что границы не существует; см. [ForwardError].
+     */
+    class DiagnosedSolution(val x: DoubleArray, val forwardError: ForwardError)
+
+    /**
+     * Решает `A x = b` И ОЦЕНИВАЕТ ПРЯМУЮ ОШИБКУ полученного решения.
+     *
+     * ПОЧЕМУ ЭТОГО НЕ ДЕЛАЕТ [solve]. Постпроверка внутри [solve] контролирует
+     * ОБРАТНУЮ ошибку — невязку `‖Ax − b‖∞` относительно масштаба системы
+     * (см. [SINGULARITY_RELATIVE_TOLERANCE]). У LU с частичным выбором эта величина
+     * мала ВСЕГДА — включая численно вырожденные матрицы (измерено 3.97e-16),
+     * поэтому постпроверка ловит МУСОР, но НИЧЕГО НЕ ГОВОРИТ О ТОЧНОСТИ.
+     * Прямая ошибка растёт как `cond(A) · ε` и на плохо обусловленной системе съедает
+     * все значащие цифры: на выходе [solve] режим «результат точен» и режим
+     * «результат бессмыслен» для вызывающего неразличимы. Различие двух ошибок
+     * разобрано в KDoc [ForwardError].
+     *
+     * ДИАГНОСТИКА ОПЦИОНАЛЬНА И НЕ ВСТРОЕНА В [solve]. Она стоит отдельных
+     * O(n³) — столько же, сколько само решение, то есть удваивает цену, а [solve]
+     * вызывается на горячем пути сборки матриц (в частности, `n` раз внутри
+     * самого [Conditioning.inverse]). Встроенная диагностика дала бы ещё и
+     * бесконечную рекурсию. Все существующие вызовы [solve] остаются без изменений.
+     *
+     * НЕ ОТБРАКОВКА. Функция НЕ бросает исключение из-за большого `cond` и не
+     * подменяет решение: большое `cond` здесь — штатный режим метода, а не
+     * ошибка (задача F1 с `alpha = 1e-10` штатно даёт `cond ≈ 2.6e10`; почему
+     * отбраковка по обусловленности была бы НЕВЕРНА по сути — в KDoc
+     * [SINGULARITY_RELATIVE_TOLERANCE]). Решение, доверять ли числу, принимает
+     * вызывающий.
+     *
+     * КОНТРАКТ НА ВЫРОЖДЕННОСТИ СОХРАНЁН: решение идёт через [solve], поэтому
+     * на точно вырожденной системе бросается [IllegalStateException] до того, как
+     * начнётся диагностика.
+     *
+     * @param source чем оценивать `cond`; см. [ConditionSource].
+     * @param tolerance порог достоверности по невязке обращения; читается только
+     *        при [ConditionSource.INVERSION].
+     * @throws IllegalStateException при вырожденности — тем же контрактом, что и [solve].
+     * @throws IllegalArgumentException при [ConditionSource.SYMMETRIC_SPECTRUM] и несимметричной `A`.
+     */
+    fun solveDiagnosed(
+        a: Array<DoubleArray>,
+        b: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+        source: ConditionSource = ConditionSource.INVERSION,
+        tolerance: Double = Conditioning.INVERSION_RESIDUAL_TOLERANCE,
+    ): DiagnosedSolution {
+        val x = solve(a, b, backend)
+        val omega = Conditioning.relativeBackwardError(a, b, x)
+        val forward = when (source) {
+            ConditionSource.INVERSION -> Conditioning.forwardError(Conditioning.conditionInf(a, tolerance), omega)
+            ConditionSource.SYMMETRIC_SPECTRUM -> Conditioning.forwardErrorSymmetric(a, omega)
+        }
+        return DiagnosedSolution(x, forward)
     }
 
     /**
