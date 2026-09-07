@@ -1,4 +1,4 @@
-package numerics.functionals
+package numerics
 
 import org.junit.jupiter.api.Tag
 import kotlin.test.Test

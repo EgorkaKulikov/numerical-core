@@ -1,4 +1,4 @@
-package numerics.functionals
+package numerics
 
 import kotlin.math.abs
 
