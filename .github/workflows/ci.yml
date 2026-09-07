@@ -1,291 +1,105 @@
-# Непрерывная интеграция проекта numerical-algorithms.
+# Непрерывная интеграция библиотеки numerical-core.
 #
-# Разделение на job'ы повторяет разделение тестов по тегам в build.gradle.kts
-# и сделано по одной причине: обратная связь на каждый PR обязана быть быстрой.
-#   fast            — единицы секунд + покрытие, гоняется всегда;
-#   characterization — гейт порядка сходимости (~2 мин), гоняется всегда;
-#   scipy           — внешняя сверка, требует venv с Python и потому вынесена отдельно;
-#   full            — прогон по крупным сеткам (`slowTest`), гоняется на каждый push и PR
-#                     параллельно остальным.
+# Два job'а, оба быстрые (единицы секунд на тесты, ~1 мин с прогревом Gradle):
+#   test          — весь набор тестов на бэкенде по умолчанию (multik/OpenBLAS с
+#                   откатом на reference) и на чистом JVM-бэкенде, плюс отчёт Kover;
+#   publish-check — локальная публикация артефакта и проверка, что jar, sources и
+#                   POM действительно легли в ~/.m2: это единственный способ
+#                   подключения библиотеки соседними репозиториями.
 #
-# МАШИННО-ЗАВИСИМЫЕ ГЕЙТЫ ЗДЕСЬ НЕ ГОНЯЮТСЯ — все шаги передают
-# `-PmachineDependentGates=false`. Причина и цена решения — в build.gradle.kts
-# (блок `machineDependentGates`) и docs/TESTING.md. Кратко: эталоны с допуском 1e-9
-# сняты на macOS aarch64, а здесь ubuntu x86_64: другие ядра OpenBLAS дают другой
-# порядок суммирования, и на плохо обусловленных задачах F1 расхождение выходит
-# далеко за допуск. Эти гейты — ЛОКАЛЬНЫЕ, они входят в `./gradlew check`/`build`,
-# прогон которого требуется перед отправкой изменений (правило 6 README).
-# Что CI продолжает проверять: 289 быстрых тестов, 9 тестов сверки со SciPy,
-# 168 сочетаний порядка сходимости и 613 из 655 опубликованных значений
-# (всё, кроме 42 ключей F1).
+# Машинно-зависимых гейтов здесь НЕТ: все выходы библиотеки проверяются
+# аналитическими тестами с допусками, не привязанными к архитектуре CPU.
+# Характеризационные эталоны с допуском 1e-9 живут в integral-equations и
+# гоняются там против опубликованного артефакта этой библиотеки.
 name: CI
 
 on:
   push:
     branches: ['**']
   pull_request:
-  schedule:
-    # Ночной полный прогон: медленный набор не должен блокировать разработку днём.
-    - cron: '0 3 * * *'
 
-# Отменяем предыдущий прогон той же ветки: устаревший результат никому не нужен,
-# а медленные job'ы иначе выстраиваются в очередь.
+# Отменяем предыдущий прогон той же ветки: устаревший результат никому не нужен.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  fast:
-    name: Быстрый набор тестов и покрытие
+  test:
+    name: Тесты и покрытие
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Установка JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Настройка Gradle с кэшем
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v4
 
-      # ДИАГНОСТИКА БЭКЕНДА — обязательно ПЕРВЫМ прогоном тестов.
-      #
-      # Зачем. `Backends.select` при недоступности нативного OpenBLAS МОЛЧА
-      # откатывается на `ReferenceBackend`, а эталон `baseline-eh.tsv` привязан к
-      # multik: на reference гейт характеризации падает 4/4 с расхождением до 5.7e-2
-      # при допуске 1e-9. Без этого шага такой откат выглядел бы как «рефакторинг
-      # испортил числа», и разбирательство ушло бы не туда.
-      #
-      # Как это работает. `BackendSpiTest.multikCpuBackendIsAvailableHere` УТВЕРЖДАЕТ
-      # и доступность `MultikCpuBackend`, и то, что он выбран активным. Если нативная
-      # библиотека не поднялась — падает именно этот тест с внятным сообщением.
-      # Отдельный тест ради диагностики не изобретаем: нужный уже есть.
+      # ДИАГНОСТИКА БЭКЕНДА — первым прогоном. `Backends.select` при недоступности
+      # нативного OpenBLAS МОЛЧА откатывается на `ReferenceBackend`;
+      # `BackendSpiTest.multikCpuBackendIsAvailableHere` делает этот откат видимым.
       - name: Диагностика активного бэкенда линейной алгебры
-        run: ./gradlew fastTest --tests 'numerics.backend.BackendSpiTest' --info -PmachineDependentGates=false
+        run: ./gradlew test --tests 'numerics.backend.BackendSpiTest' --info
 
-      # Компиляция sourceSet'ов `demo` и `problems` включена намеренно: `fastTest`
-      # тянет только `problems` (он в classpath тестов), а `demo` — нет, поэтому
-      # сломанный `src/demo` проходил бы зелёным на всех PR.
-      - name: Быстрый набор тестов, покрытие и компиляция demo
-        run: ./gradlew fastTest koverXmlReport compileDemoKotlin compileProblemsKotlin -PmachineDependentGates=false
+      - name: Тесты и покрытие (бэкенд по умолчанию)
+        run: ./gradlew test koverXmlReport
+
+      # Тот же набор на чистом JVM-бэкенде: эквивалентность бэкендов — контракт
+      # библиотеки, и он обязан выполняться на обоих путях, а не только на том,
+      # который случайно оказался активным.
+      - name: Тесты на эталонном бэкенде
+        run: ./gradlew test -Dnumerics.backend=reference --rerun
 
       - name: Отчёты тестов и покрытия
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: test-reports-fast
+          name: test-reports
           path: |
-            build/reports/tests/fastTest/**
-            build/test-results/fastTest/**
+            build/reports/tests/test/**
+            build/test-results/test/**
             build/reports/kover/**
           if-no-files-found: warn
 
-  characterization:
-    name: Гейты численной нейтральности и порядка сходимости
+  publish-check:
+    name: Проверка публикации артефакта
     runs-on: ubuntu-latest
-    # Замеры на машине разработчика: `characterizationTest` 5 тестов ~27 с,
-    # `extraCharacterizationTest` ~19 с, `convergenceOrderTest` 1.5-2 мин — итого ~2.5 мин.
-    # Запас многократный — на холодный старт JVM и непрогретый кэш Gradle на раннере.
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Установка JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Настройка Gradle с кэшем
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v4
 
-      # ГЕЙТ E_h ПРОТИВ ЭТАЛОНА ЗДЕСЬ НЕ ГОНЯЕТСЯ — и это НЕ ослабление проверок.
-      # `EhCharacterizationTest` сверяет 1366 значений с допуском 1e-9 против эталона,
-      # снятого на macOS aarch64. На ubuntu x86_64 он был КРАСНЫМ С ПЕРВОГО ПРОГОНА
-      # (30.07), хотя локально все 5 тестов зелёные: разные ядра OpenBLAS (NEON против
-      # AVX) дают разный порядок блочного суммирования. Постоянно красный гейт
-      # хуже отсутствующего: его перестают читать. Гейт остаётся ЛОКАЛЬНЫМ в
-      # `./gradlew check`/`build` — на том единственном железе, где он осмыслен.
-      # Подробности и отвергнутые альтернативы — docs/TESTING.md.
+      - name: Публикация в локальный репозиторий Maven
+        run: ./gradlew publishToMavenLocal
 
-      # ГЕЙТ ПОРЯДКА СХОДИМОСТИ (задача 1 `TASK.md`). Полная матрица из 168 сочетаний
-      # на сетках до n = 64. Почему ЗДЕСЬ, а не в job `fast`: полная матрица стоит полторы-две
-      # минуты и ломала бы требование «обратная связь на PR — единицы секунд»; быстрый
-      # поднабор того же класса (тег `fast`, 32 сочетания) уже гоняется там в составе `fastTest`.
-      # Почему ОТДЕЛЬНЫМ ШАГОМ, а не через `check`: задача осознанно исключена из источников
-      # покрытия Kover (`disabledForTestTasks` в build.gradle.kts) — она дорожала `check` на
-      # полторы-две минуты, не добавляя ни одной покрытой строки. Без этого шага гейт
-      # не запускался бы НИ В ОДНОМ job, хотя README и TASK.md утверждают обратное.
-      - name: Гейт порядка сходимости (полная матрица)
-        run: ./gradlew convergenceOrderTest -PmachineDependentGates=false
-
-      - name: Отчёты гейтов
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-reports-characterization
-          path: |
-            build/reports/tests/characterizationTest/**
-            build/test-results/characterizationTest/**
-            build/reports/tests/convergenceOrderTest/**
-            build/test-results/convergenceOrderTest/**
-          if-no-files-found: warn
-
-  scipy:
-    name: Внешняя сверка со SciPy
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Установка JDK 21
-        uses: actions/setup-java@v5
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Настройка Gradle с кэшем
-        uses: gradle/actions/setup-gradle@v6
-
-      # Ключ кэша — хеш файла требований: смена пиннинга обязана приводить к
-      # переустановке окружения, иначе сверка шла бы на старых версиях SciPy.
-      - name: Кэш окружения Python со SciPy
-        uses: actions/cache@v6
-        with:
-          path: .venv-verify
-          key: venv-verify-${{ runner.os }}-${{ hashFiles('tools/requirements-verify.txt') }}
-
-      # Задача выставляет `scipy.required=true`, поэтому битое окружение
-      # (интерпретатор есть, SciPy нет) даёт FAILURE, а не 9 тихих SKIP при
-      # зелёной сборке. Именно этого job'а не должно быть достаточно «пройти молча».
-      # Фактический замер: 9 тестов, 60 проверок, NumPy 2.5.1 / SciPy 1.18.0.
-      - name: Внешняя сверка со SciPy/NumPy
-        run: ./gradlew scipyVerify -PmachineDependentGates=false
-
-      - name: Отчёты сверки
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-reports-scipy
-          path: |
-            build/reports/tests/scipyVerify/**
-            build/test-results/scipyVerify/**
-            build/verification/scipy-report.json
-          if-no-files-found: warn
-
-  # -------------------------------------------------------------------------
-  # JOB `full` — МЕДЛЕННЫЙ НАБОР ЦЕЛИКОМ (включён этапом 8.6).
-  #
-  # ИСТОРИЯ. До этапа 8.6 job был ЗАКОММЕНТИРОВАН, и причина была не во времени
-  # прогона, а в КРАСНОМ РЕЗУЛЬТАТЕ: `PublishedValuesTest.fredholmFirstKindMatchesPublishedValues`
-  # давал 4 расхождения с публикацией на ключах `F.F1.H.theta.*` (до 6.78 % при
-  # допуске 2 %) — уравнение ПЕРВОГО рода F1 с регуляризацией Вазваза,
-  # `cond(I - M) ~ 1e10`. Пункт 8.6 закрыл это НЕ ослаблением общего допуска (он
-  # по-прежнему 2 %), а узким классом 8 % для шести ключей таблицы `table-f1.tex`,
-  # выведенным из измеренного разброса между реализациями LU на этих же ключах;
-  # компенсация — покрытие F1 в `baseline-eh.tsv` расширено с 4 до 54 ключей.
-  #
-  # ЗАМЕР ПОСЛЕ ЗАКРЫТИЯ (`./gradlew slowTest --rerun`, машина разработчика):
-  # 23 теста, 0 падений, 8 мин 39 с (из них `PublishedValuesTest` ~190 с,
-  # `ConvergenceOrderTest` 1.5-2 мин). `timeout-minutes: 45` — запас пятикратный на
-  # более медленный раннер, холодный старт JVM и непрогретый кэш Gradle.
-  #
-  # ПОЧЕМУ ОТДЕЛЬНЫМ JOB'ОМ, а не шагом в `fast`. Восемь минут в job'е `fast`
-  # сломали бы его назначение — обратная связь на PR за единицы секунд.
-  # Отдельный job идёт ПАРАЛЛЕЛЬНО остальным и ничего не замедляет.
-  #
-  # ПОЧЕМУ БЕЗ УСЛОВИЯ `if:` НА ВЕТКУ (было `github.ref == 'refs/heads/main'`).
-  # Смысл гейта — поймать регрессию ДО мержа, а не после. Гейт, работающий
-  # только на `main`, сообщает о поломке тогда, когда она уже в основной ветке.
-  # Сверка с публикацией и ограничитель ширины послабления живут именно здесь.
-  #
-  # Вариант `continue-on-error: true` ОТВЕРГНУТ и сейчас: он даёт ЗЕЛЁНУЮ галочку
-  # при невыполненных проверках — ровно тот ложный сигнал, от которого этап
-  # избавлялся в остальных местах.
-  #
-  # СООТНОШЕНИЕ С `check`: `slowTest` также входит в `check` (через источники Kover,
-  # см. build.gradle.kts), то есть исполняется и локально в `./gradlew build`.
-  # Этот job — гарантия на стороне CI, не зависящая от поведения плагина Kover.
-  full:
-    name: Медленный набор тестов (сверка с публикацией)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Установка JDK 21
-        uses: actions/setup-java@v5
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Настройка Gradle с кэшем
-        uses: gradle/actions/setup-gradle@v6
-
-      # 23 теста тега `slow` за ОДИН запуск. Главное здесь и ни в одном другом job'е:
-      # `PublishedValuesTest` — сверка с ВНЕШНИМ источником правды, не замкнутая
-      # на собственные снимки проекта.
-      - name: Медленный набор тестов
-        run: ./gradlew slowTest -PmachineDependentGates=false
-
-      # ДИАГНОСТИКА ПАДЕНИЙ ЧЕРЕЗ АННОТАЦИИ — НЕ КОСМЕТИКА, А ЕДИНСТВЕННЫЙ КАНАЛ.
-      #
-      # Проблема, ради которой этот шаг существует: логи job'а и артефакты через
-      # REST API требуют админ-прав на репозиторий (403 Must have admin rights),
-      # а штатные аннотации при падении содержат лишь «Process completed with exit
-      # code 1». То есть без этого шага причина падения видна ТОЛЬКО владельцу
-      # репозитория вручную через UI, а любому другому участнику и любому
-      # автоматическому средству — не видна вообще.
-      #
-      # Команда рабочего процесса `::error::` создаёт аннотацию, которая видна
-      # и в UI, и через API БЕЗ привилегий. Здесь она наполняется из JUnit-отчётов,
-      # то есть в аннотацию попадают ИМЕНА тестов и САМИ РАСХОЖДЕНИЯ (ключ,
-      # опубликованное и вычисленное значение, процент расхождения).
-      #
-      # Сторонние action’ы (dorny/test-reporter и пр.) сознательно НЕ использованы:
-      # задача решается встроенным механизмом, и гейт не должен зависеть от чужого
-      # репозитория и его прав на токен.
-      #
-      # `if: ${{ !cancelled() }}` — шаг обязан отработать ИМЕННО при падении
-      # предыдущего; при отмене прогона — нет (поэтому не `always()`).
-      # Сам шаг ВСЕГДА завершается успехом: он только СООБЩАЕТ о падениях,
-      # а вердикт job'а остаётся за шагом с тестами.
-      - name: Детали падений в аннотации (видны без админ-прав)
-        if: ${{ !cancelled() }}
+      # Координаты и версия читаются из gradle.properties, чтобы проверка не
+      # расходилась со сборкой при смене версии.
+      - name: Проверка наличия артефактов в ~/.m2
         run: |
-          python3 - <<'PY'
-          import glob, xml.etree.ElementTree as ET
-
-          def annotate(text: str) -> str:
-              # Экранирование по спецификации workflow-команд: без него многострочное
-              # сообщение оборвётся на первой же строке.
-              return (text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
-
-          found = 0
-          for path in sorted(glob.glob('build/test-results/**/*.xml', recursive=True)):
-              try:
-                  root = ET.parse(path).getroot()
-              except ET.ParseError:
-                  continue
-              for case in root.iter('testcase'):
-                  for bad in list(case.iter('failure')) + list(case.iter('error')):
-                      found += 1
-                      body = bad.get('message') or bad.text or ''
-                      # Лимит аннотации — порядка 64 КБ; берём с запасом.
-                      print(f"::error title={case.get('classname')}.{case.get('name')}::"
-                            f"{annotate(body[:8000])}")
-          print(f"Найдено падений в отчётах: {found}")
-          PY
-
-      - name: Отчёты тестов
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-reports-full
-          path: |
-            build/reports/tests/slowTest/**
-            build/test-results/slowTest/**
-          if-no-files-found: warn
+          set -eu
+          group=$(grep '^group=' gradle.properties | cut -d= -f2 | tr . /)
+          version=$(grep '^version=' gradle.properties | cut -d= -f2)
+          dir="$HOME/.m2/repository/$group/numerical-core/$version"
+          ls -la "$dir"
+          for f in "numerical-core-$version.jar" "numerical-core-$version-sources.jar" "numerical-core-$version.pom"; do
+            test -s "$dir/$f" || { echo "отсутствует $dir/$f"; exit 1; }
+          done
+          # В POM не должно быть зависимостей на соседние библиотеки: направление
+          # зависимостей — только от них к numerical-core.
+          if grep -qE 'minimal-splines|integral-equations' "$dir/numerical-core-$version.pom"; then
+            echo "POM содержит обратную зависимость"; exit 1
+          fi
+          echo "артефакт $group:numerical-core:$version опубликован корректно"
