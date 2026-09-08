@@ -27,6 +27,12 @@ class NetlibBackend internal constructor(
         if (isNative) "netlib ${lapack.javaClass.simpleName} (нативная BLAS/LAPACK системы)"
         else "netlib ${lapack.javaClass.simpleName} (Java)"
 
+    override fun axpy(alpha: Double, x: DoubleArray, y: DoubleArray) {
+        require(x.size == y.size) { "axpy: длины векторов должны совпадать, получено ${x.size} и ${y.size}" }
+        if (x.isEmpty()) return
+        blas.daxpy(x.size, alpha, x, 1, y, 1)
+    }
+
     override fun matVec(a: DenseMatrix, x: DoubleArray): DoubleArray {
         val y = DoubleArray(a.rows)
         if (a.rows == 0 || a.cols == 0) return y

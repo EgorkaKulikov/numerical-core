@@ -27,6 +27,12 @@ interface LinAlgBackend {
     val isNative: Boolean
 
     /** Произведение A·x для A размера m×k и x длины k; результат длины m. */
+    /**
+     * Обновление вектора `y += alpha·x` на месте (daxpy).
+     * @throws IllegalArgumentException если длины `x` и `y` различаются.
+     */
+    fun axpy(alpha: Double, x: DoubleArray, y: DoubleArray)
+
     fun matVec(a: DenseMatrix, x: DoubleArray): DoubleArray
 
     /** Произведение Aᵀ·y для A размера m×n и y длины m; результат длины n. */

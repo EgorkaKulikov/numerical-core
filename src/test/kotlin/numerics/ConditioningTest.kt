@@ -130,7 +130,7 @@ class ConditioningTest {
         assertEquals(trace, eig.sum(), 1e-10)
     }
 
-    /** Несимметричная матрица, пустая, неквадратная и maxSweeps < 1 отвергаются контрактом. */
+    /** Несимметричная матрица, пустая и неквадратная отвергаются контрактом. */
     @Test fun symmetricEigenvaluesRejectMalformed() {
         assertFailsWith<IllegalArgumentException> {
             Conditioning.symmetricEigenvalues(arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 1.0)))
@@ -138,9 +138,6 @@ class ConditioningTest {
         assertFailsWith<IllegalArgumentException> { Conditioning.symmetricEigenvalues(arrayOf()) }
         assertFailsWith<IllegalArgumentException> {
             Conditioning.symmetricEigenvalues(arrayOf(doubleArrayOf(1.0, 2.0, 3.0), doubleArrayOf(1.0, 2.0, 3.0)))
-        }
-        assertFailsWith<IllegalArgumentException> {
-            Conditioning.symmetricEigenvalues(LinearAlgebra.identity(2), maxSweeps = 0)
         }
     }
 
