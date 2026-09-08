@@ -40,7 +40,7 @@ java {
 val numericsBackend: String = System.getProperty("numerics.backend") ?: "multik"
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags("golden-generate") }
     systemProperty("numerics.backend", numericsBackend)
 }
 
@@ -54,8 +54,27 @@ tasks.register<Test>("fastTest") {
     description = "Быстрый набор тестов (тег fast)"
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
-    useJUnitPlatform { includeTags("fast") }
+    useJUnitPlatform {
+        includeTags("fast")
+        excludeTags("golden-generate")
+    }
     systemProperty("numerics.backend", numericsBackend)
+}
+
+/**
+ * Перегенерация golden-эталонов поведения (JSON-файлы в `src/test/resources/golden`).
+ * Тег `golden-generate` исключён из `test`/`fastTest`; запускать только при намеренном
+ * изменении поведения. Подробности — в `src/test/resources/golden/README.md`.
+ */
+tasks.register<Test>("regenerateGolden") {
+    description = "Перегенерировать эталоны поведения в src/test/resources/golden"
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform { includeTags("golden-generate") }
+    systemProperty("golden.dir", layout.projectDirectory.dir("src/test/resources/golden").asFile.absolutePath)
+    systemProperty("numerics.backend", numericsBackend)
+    outputs.upToDateWhen { false }
 }
 
 kover {
@@ -63,6 +82,7 @@ kover {
         instrumentation {
             // Источник покрытия — `test`; `fastTest` дублирует его состав.
             disabledForTestTasks.add("fastTest")
+            disabledForTestTasks.add("regenerateGolden")
         }
     }
 }
