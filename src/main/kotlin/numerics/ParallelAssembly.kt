@@ -1,119 +1,147 @@
 package numerics
 
+import java.util.concurrent.ForkJoinPool
 import java.util.stream.IntStream
 
 /**
- * Помощник для параллельной сборки матриц по независимым строкам.
+ * Параллельная сборка матриц по независимым строкам или столбцам. Каждая задача пишет только
+ * в свой участок результата, поэтому результат побитово совпадает с последовательным
+ * независимо от числа потоков и порядка выполнения.
  *
- * Сборка матрицы (например, матрицы Грама/коллокации) часто распадается на
- * вычисление строк, не зависящих друг от друга. Каждая параллельная задача
- * пишет в СВОЙ индекс строки выходного массива, поэтому гонок данных нет:
- * разные потоки никогда не обращаются к одной и той же ячейке, а публикация
- * результата гарантируется барьером завершения `forEach`/`parallel()` в
- * java.util.stream. Зависимостей, кроме стандартной библиотеки JVM, нет.
+ * Перегрузки с `parallel: Boolean` используют общий пул (`ForkJoinPool.commonPool`); перегрузки
+ * с [NumericsContext] берут разрешение параллелизма и число потоков из контекста и создают
+ * отдельный пул на время сборки.
  */
 object ParallelAssembly {
 
     /**
-     * Собирает матрицу [rows] x [cols], вычисляя каждую строку через [rowFn].
-     *
-     * Для каждого индекса строки `i` вызывается [rowFn], результат которой
-     * (длины [cols]) кладётся в строку `i`. Так как каждый индекс пишется ровно
-     * одной задачей, операция свободна от гонок данных. При [parallel]`=true`
-     * строки вычисляются параллельно, иначе — ОБЫЧНЫМ последовательным циклом по
-     * тому же [rowFn] (побитово одинаковый результат). Режим передаётся
-     * ПАРАМЕТРОМ, а не глобальным переключателем: иначе бенчмарк, меряющий
-     * seq/par, менял бы поведение чужого кода в той же JVM.
-     *
-     * Массив-накопитель создаётся ПУСТЫМ ([arrayOfNulls]): строки приходят готовыми из
-     * [rowFn], поэтому предварительное `Array(rows) { DoubleArray(cols) }` выделяло бы
-     * rows*cols чисел лишь для того, чтобы тут же их выбросить присваиванием — а это
-     * горячий путь сборки матриц M/M2. Длина каждой строки проверяется: иначе «матрица»
-     * могла бы молча получиться рваной, и ошибка проявилась бы много позже, в линейной
-     * алгебре, уже без связи с причиной.
-     *
-     * @throws IllegalArgumentException если [rowFn] вернула строку длины, отличной от [cols].
+     * Матрица `rows × cols` как массив строк: строка `i` целиком вычисляется функцией [rowFn]
+     * (длина каждой строки должна равняться `cols`).
      */
     fun assembleRows(
         rows: Int,
         cols: Int,
         parallel: Boolean = true,
         rowFn: (Int) -> DoubleArray,
-    ): Array<DoubleArray> {
-        val result = arrayOfNulls<DoubleArray>(rows)
-        val body: (Int) -> Unit = { i ->
-            val row = rowFn(i)
-            require(row.size == cols) { "assembleRows: строка $i длины ${row.size}, ожидалось $cols" }
-            result[i] = row
-        }
-        if (parallel) {
-            IntStream.range(0, rows).parallel().forEach { i -> body(i) }
-        } else {
-            for (i in 0 until rows) body(i)
-        }
-        // Каждый индекс 0..rows-1 записан ровно один раз (иначе сработал бы require выше и
-        // управление сюда не дошло), поэтому null-ов в массиве не остаётся.
-        @Suppress("UNCHECKED_CAST")
-        return result as Array<DoubleArray>
-    }
+    ): Array<DoubleArray> = assembleRowsImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), rowFn)
 
-    /**
-     * Собирает матрицу [rows] x [cols] поячеечно: по строкам, последовательно
-     * по столбцам внутри строки.
-     *
-     * Каждая строка обрабатывается одной задачей и заполняется вызовами
-     * [cellFn] для всех столбцов; разные задачи пишут в разные строки, поэтому
-     * гонок данных нет. При [parallel]`=true` строки идут параллельно, иначе —
-     * последовательным циклом (побитово одинаковый результат).
-     */
+    /** То же, что [assembleRows], с параметрами параллелизма из [context]. */
+    fun assembleRows(
+        rows: Int,
+        cols: Int,
+        context: NumericsContext,
+        rowFn: (Int) -> DoubleArray,
+    ): Array<DoubleArray> = assembleRowsImpl(rows, cols, context.parallel, context.parallelism, rowFn)
+
+    /** Матрица `rows × cols` как массив строк: элемент `(i, j)` вычисляется функцией [cellFn]. */
     fun assembleMatrix(
         rows: Int,
         cols: Int,
         parallel: Boolean = true,
         cellFn: (Int, Int) -> Double,
-    ): Array<DoubleArray> {
-        val result = Array(rows) { DoubleArray(cols) }
-        val body: (Int) -> Unit = { i ->
-            val row = result[i]
-            for (j in 0 until cols) row[j] = cellFn(i, j)
-        }
-        if (parallel) {
-            IntStream.range(0, rows).parallel().forEach { i -> body(i) }
-        } else {
-            for (i in 0 until rows) body(i)
-        }
-        return result
-    }
+    ): Array<DoubleArray> = assembleMatrixImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), cellFn)
+
+    /** То же, что [assembleMatrix], с параметрами параллелизма из [context]. */
+    fun assembleMatrix(
+        rows: Int,
+        cols: Int,
+        context: NumericsContext,
+        cellFn: (Int, Int) -> Double,
+    ): Array<DoubleArray> = assembleMatrixImpl(rows, cols, context.parallel, context.parallelism, cellFn)
 
     /**
-     * Собирает матрицу [rows] x [cols] в плоском столбцовом формате [DenseMatrix],
-     * вычисляя каждую ячейку через [cellFn].
-     *
-     * Единица параллелизма — столбец: одна задача заполняет непрерывный отрезок
-     * `data[j * rows until (j + 1) * rows]`, и разные задачи никогда не касаются
-     * одних и тех же ячеек, поэтому гонок данных нет. При [parallel]`=true` столбцы
-     * идут параллельно, иначе — последовательным циклом; результат побитово одинаков
-     * в обоих режимах и совпадает с [assembleMatrix] после [DenseMatrix.fromRows].
-     *
-     * @throws IllegalArgumentException при отрицательных размерах.
+     * Плотная матрица `rows × cols` в столбцовом порядке: элемент `(i, j)` вычисляется функцией
+     * [cellFn]; параллелизм — по столбцам.
      */
     fun assembleDense(
         rows: Int,
         cols: Int,
         parallel: Boolean = true,
         cellFn: (Int, Int) -> Double,
+    ): DenseMatrix = assembleDenseImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), cellFn)
+
+    /** То же, что [assembleDense], с параметрами параллелизма из [context]. */
+    fun assembleDense(
+        rows: Int,
+        cols: Int,
+        context: NumericsContext,
+        cellFn: (Int, Int) -> Double,
+    ): DenseMatrix = assembleDenseImpl(rows, cols, context.parallel, context.parallelism, cellFn)
+
+    private fun requireShape(rows: Int, cols: Int) {
+        require(rows >= 0 && cols >= 0) { "размеры не могут быть отрицательными: $rows×$cols" }
+    }
+
+    private fun assembleRowsImpl(
+        rows: Int,
+        cols: Int,
+        parallel: Boolean,
+        parallelism: Int,
+        rowFn: (Int) -> DoubleArray,
+    ): Array<DoubleArray> {
+        requireShape(rows, cols)
+        val result = arrayOfNulls<DoubleArray>(rows)
+        forEachIndex(rows, parallel, parallelism) { i ->
+            val row = rowFn(i)
+            require(row.size == cols) { "assembleRows: строка $i длины ${row.size}, ожидалось $cols" }
+            result[i] = row
+        }
+        // Каждый индекс записан ровно один раз (иначе сработал бы require выше), null-ов не остаётся.
+        @Suppress("UNCHECKED_CAST")
+        return result as Array<DoubleArray>
+    }
+
+    private fun assembleMatrixImpl(
+        rows: Int,
+        cols: Int,
+        parallel: Boolean,
+        parallelism: Int,
+        cellFn: (Int, Int) -> Double,
+    ): Array<DoubleArray> {
+        requireShape(rows, cols)
+        val result = Array(rows) { DoubleArray(cols) }
+        forEachIndex(rows, parallel, parallelism) { i ->
+            val row = result[i]
+            for (j in 0 until cols) row[j] = cellFn(i, j)
+        }
+        return result
+    }
+
+    private fun assembleDenseImpl(
+        rows: Int,
+        cols: Int,
+        parallel: Boolean,
+        parallelism: Int,
+        cellFn: (Int, Int) -> Double,
     ): DenseMatrix {
-        require(rows >= 0 && cols >= 0) { "assembleDense: размеры не могут быть отрицательными: $rows x $cols" }
+        requireShape(rows, cols)
         val data = DoubleArray(rows * cols)
-        val body: (Int) -> Unit = { j ->
+        forEachIndex(cols, parallel, parallelism) { j ->
             val base = j * rows
             for (i in 0 until rows) data[base + i] = cellFn(i, j)
         }
-        if (parallel) {
-            IntStream.range(0, cols).parallel().forEach { j -> body(j) }
-        } else {
-            for (j in 0 until cols) body(j)
-        }
         return DenseMatrix.fromColumnMajor(rows, cols, data)
+    }
+
+    /**
+     * Выполняет [body] для индексов `0 until count`. Последовательно, если параллелизм запрещён,
+     * число потоков равно 1 или индексов меньше двух; иначе — параллельным потоком в общем пуле
+     * (`parallelism == availableProcessors`) либо в отдельном пуле заданного размера.
+     */
+    private fun forEachIndex(count: Int, parallel: Boolean, parallelism: Int, body: (Int) -> Unit) {
+        if (!parallel || parallelism == 1 || count < 2) {
+            for (i in 0 until count) body(i)
+            return
+        }
+        if (parallelism == Runtime.getRuntime().availableProcessors()) {
+            IntStream.range(0, count).parallel().forEach { i -> body(i) }
+            return
+        }
+        val pool = ForkJoinPool(parallelism)
+        try {
+            pool.submit { IntStream.range(0, count).parallel().forEach { i -> body(i) } }.get()
+        } finally {
+            pool.shutdown()
+        }
     }
 }

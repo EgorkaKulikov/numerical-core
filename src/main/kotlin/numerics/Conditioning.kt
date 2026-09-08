@@ -383,4 +383,26 @@ object Conditioning {
         require(a.isNotEmpty() && a[0].isNotEmpty()) { "матрица A не должна быть пустой" }
         return DenseMatrix.fromRows(a)
     }
+
+    // Перегрузки с NumericsContext используют его реализацию линейной алгебры.
+
+    fun inverse(a: DenseMatrix, context: NumericsContext): DenseMatrix? = inverse(a, context.backend)
+
+    fun conditionInf(
+        a: DenseMatrix,
+        context: NumericsContext,
+        tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
+    ): ConditionEstimate = conditionInf(a, tolerance, context.backend)
+
+    fun conditionEstimate(
+        a: DenseMatrix,
+        context: NumericsContext,
+        tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
+    ): ConditionEstimate = conditionEstimate(a, tolerance, context.backend)
+
+    fun symmetricEigenvalues(a: DenseMatrix, context: NumericsContext): DoubleArray =
+        symmetricEigenvalues(a, context.backend)
+
+    fun conditionSymmetric(a: DenseMatrix, context: NumericsContext): Double =
+        conditionSymmetric(a, context.backend)
 }

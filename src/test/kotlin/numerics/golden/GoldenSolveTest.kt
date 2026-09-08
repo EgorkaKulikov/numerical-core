@@ -4,6 +4,7 @@ import numerics.Conditioning
 import numerics.ForwardError
 import numerics.LinearAlgebra
 import numerics.golden.GoldenIo.assertClose
+import numerics.golden.GoldenIo.assertNoiseLevel
 import numerics.golden.GoldenIo.entry
 import numerics.golden.GoldenIo.obj
 import numerics.golden.GoldenIo.section
@@ -60,10 +61,10 @@ class GoldenSolveTest {
                 is ForwardError.Unreliable -> {
                     val c = obj(exp["condition"])
                     assertClose(toDbl(c["condInf"]), got.condition.condInf, tol, "$label.condition.condInf")
-                    assertClose(
+                    assertNoiseLevel(
                         toDbl(c["inversionResidual"]),
                         got.condition.inversionResidual,
-                        tol,
+                        got.condition.condInf,
                         "$label.condition.inversionResidual",
                     )
                     assertClose(toDbl(c["tolerance"]), got.condition.tolerance, tol, "$label.condition.tolerance")

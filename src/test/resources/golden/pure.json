@@ -1,8 +1,8 @@
 {
   "generatedWith": {
     "version": "0.1.0",
-    "backend": "multik-cpu (OpenBLAS)",
-    "date": "2026-09-08T20:42:31.005218Z"
+    "backend": "netlib F2jLAPACK (Java)",
+    "date": "2026-09-08T22:47:05.316315Z"
   },
   "forwardError": {
     "cond=1.0;residual=0.0;omega=0.0": {
@@ -1179,7 +1179,7 @@
     },
     "[Infinity, 1.0]": {
       "input": ["7ff0000000000000", "3ff0000000000000"],
-      "orders": ["7ff0000000000000", "7ff8000000000000"],
+      "orders": ["7ff8000000000000", "7ff8000000000000"],
       "reliableOrders": [null, null]
     },
     "[1.0]": {

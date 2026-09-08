@@ -2,6 +2,7 @@ package numerics.golden
 
 import numerics.Conditioning
 import numerics.golden.GoldenIo.assertClose
+import numerics.golden.GoldenIo.assertNoiseLevel
 import numerics.golden.GoldenIo.entry
 import numerics.golden.GoldenIo.obj
 import numerics.golden.GoldenIo.section
@@ -24,7 +25,12 @@ class GoldenConditioningTest {
                 val tol = GoldenInputs.tolFor(case)
                 val est = Conditioning.conditionInf(case.matrix())
                 assertClose(toDbl(exp["condInf"]), est.condInf, tol, "${case.key}.condInf")
-                assertClose(toDbl(exp["inversionResidual"]), est.inversionResidual, tol, "${case.key}.inversionResidual")
+                assertNoiseLevel(
+                    toDbl(exp["inversionResidual"]),
+                    est.inversionResidual,
+                    est.condInf,
+                    "${case.key}.inversionResidual",
+                )
                 assertEquals(exp["isReliable"] as Boolean, est.isReliable, "${case.key}.isReliable")
             }
         }

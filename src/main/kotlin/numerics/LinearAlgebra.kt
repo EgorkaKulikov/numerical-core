@@ -364,4 +364,35 @@ object LinearAlgebra {
         }
         return DenseOps.maxAsymmetry(a)
     }
+
+    // Перегрузки с NumericsContext используют его реализацию линейной алгебры.
+
+    fun matVec(a: DenseMatrix, x: DoubleArray, context: NumericsContext): DoubleArray =
+        matVec(a, x, context.backend)
+
+    fun matTransVec(a: DenseMatrix, y: DoubleArray, context: NumericsContext): DoubleArray =
+        matTransVec(a, y, context.backend)
+
+    fun matMat(a: DenseMatrix, b: DenseMatrix, context: NumericsContext): DenseMatrix =
+        matMat(a, b, context.backend)
+
+    fun atWa(a: DenseMatrix, w: DoubleArray, context: NumericsContext): DenseMatrix =
+        atWa(a, w, context.backend)
+
+    fun addScaled(a: DenseMatrix, b: DenseMatrix, s: Double, context: NumericsContext): DenseMatrix =
+        addScaled(a, b, s, context.backend)
+
+    fun solve(a: DenseMatrix, b: DoubleArray, context: NumericsContext): DoubleArray =
+        solve(a, b, context.backend)
+
+    fun solveDiagnosed(
+        a: DenseMatrix,
+        b: DoubleArray,
+        context: NumericsContext,
+        source: ConditionSource = ConditionSource.INVERSION,
+        tolerance: Double = Conditioning.INVERSION_RESIDUAL_TOLERANCE,
+    ): DiagnosedSolution = solveDiagnosed(a, b, context.backend, source, tolerance)
+
+    fun cholesky(a: DenseMatrix, context: NumericsContext): DenseMatrix? =
+        cholesky(a, context.backend)
 }

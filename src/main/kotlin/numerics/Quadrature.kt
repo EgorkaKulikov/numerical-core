@@ -2,23 +2,14 @@ package numerics
 
 import kotlin.math.abs
 
-// ============================================================================
-// 2. КВАДРАТУРА ГАУССА--ЛЕЖАНДРА
-// ============================================================================
-
 /**
- * Составная квадратура Гаусса–Лежандра по подынтервалам.
+ * Составная квадратура Гаусса–Лежандра: на каждом подынтервале разбиения применяется
+ * правило с `nodesPerSub` узлами, точное для многочленов степени `2·nodesPerSub − 1`.
  *
- * Базовый инструмент для всех интегралов в проекте: образов интегрального оператора,
- * элементов матриц дискретной задачи, правых частей и норм в L2.
+ * Эталонные узлы и веса на `[-1, 1]` вычисляются один раз в конструкторе
+ * (см. [gaussLegendreReference]) и переносятся на каждый подынтервал линейной заменой.
  *
- * Квадратура с m узлами точна для многочленов степени не выше 2m-1. Порядок по
- * умолчанию (8 узлов на подынтервал, точность до степени 15) выбран заведомо выше
- * порядка аппроксимации проектора. Это существенно: иначе погрешность самой квадратуры
- * доминировала бы над различием между схемами Слоана и Кулкарни и маскировала
- * суперсходимость последней.
- *
- * @param nodesPerSub число узлов на каждом подынтервале (должно быть >= 1)
+ * @param nodesPerSub число узлов на каждом подынтервале (не меньше 1)
  */
 class GaussLegendre(val nodesPerSub: Int = 8) {
 
@@ -26,19 +17,29 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
     private val refWeights: DoubleArray
 
     init {
-        require(nodesPerSub >= 1)
+        require(nodesPerSub >= 1) { "число узлов на подынтервал должно быть не меньше 1, получено $nodesPerSub" }
         val (nodes, weights) = gaussLegendreReference(nodesPerSub)
         refNodes = nodes
         refWeights = weights
     }
 
-    /** Интеграл f по составному разбиению breakpoints (возрастающие, с концами). */
+    /**
+     * Интеграл `f` по составному разбиению `breakpoints`: точки строго возрастают,
+     * первая и последняя — концы отрезка интегрирования.
+     *
+     * @throws IllegalArgumentException если точек меньше двух или они не строго возрастают
+     */
     fun integrate(breakpoints: DoubleArray, f: (Double) -> Double): Double {
+        require(breakpoints.size >= 2) { "разбиение должно содержать не менее двух точек, получено ${breakpoints.size}" }
+        for (k in 0 until breakpoints.size - 1) {
+            require(breakpoints[k] < breakpoints[k + 1]) {
+                "точки разбиения должны строго возрастать; нарушение между позициями $k и ${k + 1}"
+            }
+        }
         var sum = 0.0
         for (k in 0 until breakpoints.size - 1) {
             val lo = breakpoints[k]
             val hi = breakpoints[k + 1]
-            if (hi <= lo) continue
             val half = 0.5 * (hi - lo)
             val mid = 0.5 * (hi + lo)
             for (q in refNodes.indices) {
@@ -49,42 +50,39 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
         return sum
     }
 
-    /** Интеграл по одному отрезку [lo, hi]. */
-    fun integrateInterval(lo: Double, hi: Double, f: (Double) -> Double): Double =
-        integrate(doubleArrayOf(lo, hi), f)
-
     /**
-     * Эталонные узлы и веса на [-1,1] (для ручного обхода подынтервалов).
-     *
-     * Возвращает КОПИИ: раньше наружу отдавались сами внутренние массивы, и любой
-     * вызывающий мог тихо испортить квадратуру СРАЗУ ДЛЯ ВСЕХ её пользователей.
-     *
-     * Копирование допустимо только потому, что ВСЕ вызовы в `src/main` ОДНОКРАТНЫ —
-     * это инициализация (`init` / инициализатор поля), а не горячий путь:
-     *  - `FredholmOperator.init`;
-     *  - `UrysohnOperator.init`;
-     *  - `CollocationCore.init` (раньше было внутри `bMatrix`, то есть НА КАЖДОЙ итерации
-     *    Ньютона и Гаусса–Ньютона — две лишние аллокации на итерацию; исправлено);
-     *  - `VolterraOperator` — инициализаторы полей `refNodes`/`refWeights`;
-     *  - `VolterraFirstKindSolver.diagonalCheckPoints` — один вызов за построение решателя.
-     *
-     * В горячих циклах читаются УЖЕ полученные один раз локальные ссылки, а не этот
-     * метод. При добавлении нового вызова сначала убедитесь, что он не в цикле.
+     * Интеграл по одному отрезку от `lo` до `hi`. Допускается `lo > hi` — тогда концы
+     * переставляются и результат берётся со знаком минус; при `lo == hi` возвращается 0.
      */
+    fun integrateInterval(lo: Double, hi: Double, f: (Double) -> Double): Double =
+        when {
+            lo == hi -> 0.0
+            lo > hi -> -integrateInterval(hi, lo, f)
+            else -> integrate(doubleArrayOf(lo, hi), f)
+        }
+
+    /** Эталонные узлы и веса на `[-1, 1]` (возвращаются копии внутренних массивов). */
     fun refNodesWeights(): Pair<DoubleArray, DoubleArray> = refNodes.copyOf() to refWeights.copyOf()
 
     companion object {
         /**
-         * Узлы и веса Гаусса--Лежандра на [-1,1] для m точек (метод Ньютона по
-         * нулям многочлена Лежандра P_m). Точна для многочленов степени <= 2m-1.
+         * Узлы и веса Гаусса–Лежандра на `[-1, 1]` для `m` точек: метод Ньютона по нулям
+         * многочлена Лежандра `P_m` от начального приближения `cos(π(i + 3/4)/(m + 1/2))`,
+         * веса `2 / ((1 − x²)·P_m'(x)²)`. Правило точно для многочленов степени `2m − 1`.
+         *
+         * @throws IllegalArgumentException если `m < 1`
+         * @throws IllegalStateException если итерации Ньютона для какого-либо узла не сошлись
          */
         fun gaussLegendreReference(m: Int): Pair<DoubleArray, DoubleArray> {
+            require(m >= 1) { "число узлов должно быть не меньше 1, получено $m" }
+            val maxIter = 100
             val nodes = DoubleArray(m)
             val weights = DoubleArray(m)
             for (i in 0 until (m + 1) / 2) {
                 var x = Math.cos(Math.PI * (i + 0.75) / (m + 0.5))
                 var dp: Double
-                for (iter in 0 until 100) {
+                var converged = false
+                for (iter in 0 until maxIter) {
                     var p0 = 1.0
                     var p1 = x
                     for (k in 2..m) {
@@ -94,8 +92,12 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
                     dp = m * (x * p1 - p0) / (x * x - 1.0)
                     val dx = p1 / dp
                     x -= dx
-                    if (abs(dx) < 1e-15) break
+                    if (abs(dx) < 1e-15) {
+                        converged = true
+                        break
+                    }
                 }
+                check(converged) { "итерации Ньютона для узла $i не сошлись за $maxIter шагов" }
                 var p0 = 1.0
                 var p1 = x
                 for (k in 2..m) {

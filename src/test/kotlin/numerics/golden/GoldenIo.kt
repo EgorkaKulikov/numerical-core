@@ -105,6 +105,24 @@ object GoldenIo {
     fun assertClose(expected: Double, got: Double, tol: Double, label: String) =
         assertClose(doubleArrayOf(expected), doubleArrayOf(got), tol, label)
 
+    /**
+     * Сравнение невязки обращения как шума округления, а не как измерения:
+     * принимается, если оба значения не превышают 1e-12, либо совпадают по порядку величины
+     * (`max <= 10 * max(min, 1e-300)`), либо оба не превышают уровень шума `100 * eps * condInf`
+     * для матрицы с данным числом обусловленности. Относительное сравнение здесь бессмысленно:
+     * величина зависит от порядка операций в конкретной реализации LAPACK.
+     */
+    fun assertNoiseLevel(expected: Double, got: Double, condInf: Double, label: String) {
+        val hi = maxOf(expected, got)
+        val lo = minOf(expected, got)
+        val noise = 100.0 * Math.ulp(1.0) * condInf
+        val ok = hi <= 1e-12 || hi <= 10.0 * maxOf(lo, 1e-300) || hi <= noise
+        assertTrue(
+            ok,
+            "$label: расхождение больше порядка величины и выше уровня шума $noise: ожидалось $expected, получено $got",
+        )
+    }
+
     /** Побитовое совпадение (`toBits()`: все NaN считаются равными между собой). */
     fun assertBits(expected: Double, got: Double, label: String) {
         assertTrue(
