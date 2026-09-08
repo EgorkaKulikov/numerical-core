@@ -96,21 +96,9 @@ class NetlibBackend internal constructor(
     }
 
     override fun inverse(a: DenseMatrix): DenseMatrix? {
-        val n = a.rows
-        val inv = a.data.copyOf()
-        val ipiv = IntArray(n)
-        val info = intW(0)
-        lapack.dgetrf(n, n, inv, maxOf(1, n), ipiv, info)
-        checkArgs("dgetrf", info)
-        if (info.`val` > 0) return null
-        val query = DoubleArray(1)
-        lapack.dgetri(n, inv, maxOf(1, n), ipiv, query, -1, info)
-        checkArgs("dgetri", info)
-        val lwork = maxOf(query[0].toInt(), n, 1)
-        lapack.dgetri(n, inv, maxOf(1, n), ipiv, DoubleArray(lwork), lwork, info)
-        checkArgs("dgetri", info)
-        if (info.`val` > 0) return null
-        return DenseMatrix.fromColumnMajor(n, n, inv)
+        val lu = luFactor(a)
+        if (lu.isSingular) return null
+        return luSolve(lu, DenseMatrix.identity(a.rows))
     }
 
     override fun cholesky(a: DenseMatrix): DenseMatrix? {

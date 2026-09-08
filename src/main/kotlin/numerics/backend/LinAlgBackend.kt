@@ -67,7 +67,10 @@ interface LinAlgBackend {
      */
     fun luSolve(lu: LuFactorization, b: DenseMatrix): DenseMatrix
 
-    /** Обратная матрица для квадратной A либо `null`, если A вырождена. */
+    /**
+     * Обратная матрица как решение A·X = I по LU-разложению; невязка ‖A·X − I‖ контролируется
+     * так же, как при решении системы. Возвращает `null`, если A вырождена.
+     */
     fun inverse(a: DenseMatrix): DenseMatrix?
 
     /**

@@ -19,6 +19,10 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
+    // Property-based тесты (jqwik работает на JUnit Platform, теги транслируются в теги платформы)
+    testImplementation("net.jqwik:jqwik:1.9.2")
+    // Независимый оракул для линейной алгебры и квадратур Гаусса–Лежандра
+    testImplementation("org.hipparchus:hipparchus-core:4.0.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
