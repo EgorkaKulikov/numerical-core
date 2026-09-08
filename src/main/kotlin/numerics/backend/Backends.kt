@@ -1,122 +1,123 @@
 package numerics.backend
 
+import dev.ludovic.netlib.blas.JavaBLAS
+import dev.ludovic.netlib.blas.NativeBLAS
+import dev.ludovic.netlib.lapack.JavaLAPACK
+import dev.ludovic.netlib.lapack.NativeLAPACK
+import java.util.logging.Level
+import java.util.logging.Logger
+
 /**
- * Реестр и селектор подключаемых бэкендов линейной алгебры.
+ * Выбор реализации линейной алгебры.
  *
- * Здесь регистрируются реализации [LinAlgBackend] в порядке приоритета.
- * Именно сюда будущий GPU/HPC-бэкенд добавляется одной строкой в список
- * [candidates] — код решателей и фасад [numerics.LinearAlgebra] остаются
- * нетронутыми.
+ * Доступны две реализации [NetlibBackend]: [native] — системная BLAS/LAPACK через JNI
+ * (Accelerate, OpenBLAS, MKL) и [java] — переносимая реализация на Java, которая
+ * есть всегда. Реализация по умолчанию [default] выбирается один раз на процесс по
+ * системному свойству `numerics.backend`:
+ *  - `native` — только системная библиотека; если она не загрузилась, обращение
+ *    к [default] бросает [IllegalStateException];
+ *  - `java` — только реализация на Java;
+ *  - `auto` (или свойство не задано) — системная библиотека при доступности, иначе
+ *    Java с однократным предупреждением в журнал `numerics`.
  *
- * Выбор бэкенда ПО УМОЛЧАНИЮ (того, что отдаёт [default] и что попадает в
- * [numerics.NumericsContext] по умолчанию):
- *  - если задано системное свойство `numerics.backend` ("multik" | "reference"),
- *    выбирается ИМЕННО он; если запрошенный бэкенд недоступен на этой машине —
- *    бросается [IllegalStateException], а НЕ выполняется молчаливая подмена
- *    (см. [selectInitial]);
- *  - если свойство не задано — выбирается ПЕРВЫЙ из [candidates], у которого
- *    [LinAlgBackend.isAvailable] вернул true.
- *
- * Таким образом, при отсутствии нативного OpenBLAS и БЕЗ явного запроса происходит
- * автоматический откат на [ReferenceBackend] (чистый JVM) — это и есть история
- * переносимости для HPC: предпочесть ускоренный бэкенд, но гарантировать
- * работоспособность.
- *
- * Реестр НЕИЗМЕНЯЕМ: подменить выбранный бэкенд глобально нельзя — кому нужен
- * другой, передаёт его явно через [numerics.NumericsContext] или параметром
- * [numerics.LinearAlgebra].
+ * Выбор по умолчанию нельзя подменить после старта: кому нужна другая реализация,
+ * передаёт её явно параметром [numerics.LinearAlgebra] или полем
+ * [numerics.NumericsContext].
  */
 object Backends {
 
-    /** Кандидаты в порядке приоритета: ускоренный CPU, затем чистый JVM fallback. */
-    private val candidates: List<LinAlgBackend> = listOf(MultikCpuBackend, ReferenceBackend)
+    private const val PROPERTY = "numerics.backend"
 
     /**
-     * ЛЕНИВЫЙ стартовый выбор бэкенда.
-     *
-     * Ленивость здесь — не оптимизация, а требование к диагностике. Если выполнять
-     * [selectInitial] в инициализаторе объекта, то при `-Dnumerics.backend=nosuchbackend`
-     * внятный [IllegalStateException] вылетает ровно один раз, завёрнутый в
-     * `ExceptionInInitializerError`, а КАЖДОЕ последующее обращение к [Backends] даёт
-     * `NoClassDefFoundError: Could not initialize class numerics.backend.Backends`
-     * уже БЕЗ текста причины — пользователь видит непонятную ошибку загрузки класса
-     * вместо объяснения, что он опечатался в имени бэкенда.
-     *
-     * `lazy` (режим SYNCHRONIZED) не запоминает исключение инициализатора: при неудаче
-     * значение остаётся невычисленным, и следующее обращение снова выполняет выбор,
-     * снова бросая ИСХОДНОЕ исключение с исходным сообщением.
+     * Ленивый стартовый выбор. `lazy` не запоминает исключение инициализатора, поэтому
+     * при недоступной запрошенной реализации каждое обращение снова бросает исходное
+     * исключение с исходным сообщением, а не `NoClassDefFoundError` без причины.
      */
-    private val startup: Lazy<LinAlgBackend> = lazy { selectInitial() }
+    private val startup: Lazy<LinAlgBackend> = lazy { resolve(System.getProperty(PROPERTY)) }
+
+    private val javaInstance: Lazy<LinAlgBackend> = lazy {
+        quietNetlibLogging()
+        NetlibBackend(JavaBLAS.getInstance(), JavaLAPACK.getInstance())
+    }
+
+    private val nativeInstance: Lazy<LinAlgBackend> = lazy {
+        quietNetlibLogging()
+        try {
+            NetlibBackend(NativeBLAS.getInstance(), NativeLAPACK.getInstance())
+        } catch (e: RuntimeException) {
+            throw IllegalStateException("Нативная реализация BLAS/LAPACK недоступна: ${e.message}", e)
+        }
+    }
+
+    private val nativeAvailable: Lazy<Boolean> = lazy {
+        try {
+            nativeInstance.value
+            true
+        } catch (_: IllegalStateException) {
+            false
+        }
+    }
 
     /**
-     * Бэкенд ПО УМОЛЧАНИЮ: выбранный при старте процесса по `-Dnumerics.backend`
-     * либо авто-выбором.
-     *
-     * Это НЕ глобальное мутируемое состояние: значение вычисляется один раз и
-     * подменить его нельзя. Кому нужен другой бэкенд — передаёт его ЯВНО:
-     * параметром [numerics.LinearAlgebra] или полем [numerics.NumericsContext].
-     * Прежние `use()`/`reset()` удалены: они делали результат вычисления зависимым
-     * от того, что успел выставить сосед по JVM.
-     *
-     * Функция, а не свойство: обращение может БРОСИТЬ (неизвестный или недоступный
-     * запрошенный бэкенд), а бросающий геттер читается как дешёвое чтение поля.
-     * Сам вызов дёшев (чтение уже вычисленного [startup]), поэтому его безопасно
-     * использовать значением параметра по умолчанию в горячем пути.
-     *
-     * @throws IllegalStateException при КАЖДОМ обращении, если стартовый выбор
-     *   невозможен (запрошен неизвестный или недоступный бэкенд).
+     * Реализация по умолчанию, выбранная при первом обращении по свойству `numerics.backend`.
+     * Обращение дёшево, поэтому безопасно как значение параметра по умолчанию.
+     * @throws IllegalStateException если запрошена недоступная реализация.
+     * @throws IllegalArgumentException если значение свойства не из числа допустимых.
      */
     fun default(): LinAlgBackend = startup.value
 
-    /** Список зарегистрированных бэкендов (в порядке приоритета). */
-    fun available(): List<LinAlgBackend> = candidates
+    /**
+     * Системная BLAS/LAPACK через JNI.
+     * @throws IllegalStateException если нативная библиотека не загрузилась.
+     */
+    fun native(): LinAlgBackend = nativeInstance.value
+
+    /** Переносимая реализация на Java; доступна всегда. */
+    fun java(): LinAlgBackend = javaInstance.value
+
+    /** Истина, если системная библиотека загрузилась; результат вычисляется один раз. */
+    fun isNativeAvailable(): Boolean = nativeAvailable.value
+
+    /** Реально доступные реализации: системная (если загрузилась) и Java. */
+    fun available(): List<LinAlgBackend> =
+        if (isNativeAvailable()) listOf(native(), java()) else listOf(java())
+
+    /** Имя реализации по умолчанию и режим, заданный свойством. */
+    fun describe(): String =
+        "backend=${default().name}, ${PROPERTY}=${System.getProperty(PROPERTY) ?: "auto"}"
 
     /**
-     * Начальный выбор бэкенда.
-     *
-     * ЯВНЫЙ запрос через `-Dnumerics.backend=...` исполняется буквально: если
-     * запрошенный бэкенд недоступен, поднимается ошибка. Молчаливый откат в этом
-     * случае — источник трудноуловимых расхождений: на плохо обусловленных задачах
-     * (например, регуляризованное уравнение первого рода) замена multik на reference
-     * меняет численный результат на проценты, а пользователь, задавший свойство
-     * осознанно, считает, что работает на запрошенном бэкенде.
-     *
-     * При ОТСУТСТВИИ свойства авто-выбор с откатом сохранён: там он уместен и
-     * является заявленной гарантией переносимости.
-     *
-     * @throws IllegalStateException если запрошен недоступный или неизвестный бэкенд.
+     * Разбор значения свойства `numerics.backend` в реализацию; вынесен отдельно, чтобы
+     * проверять логику выбора, не трогая стартовое значение [default].
      */
-    private fun selectInitial(): LinAlgBackend =
-        select(System.getProperty("numerics.backend")?.trim()?.lowercase())
-
-    /**
-     * Чистая (тестируемая) логика выбора — та же, что применяется при старте.
-     *
-     * @param requested значение свойства `numerics.backend` в нижнем регистре либо null.
-     * @param isAvailable предикат доступности; параметризован, чтобы тест мог
-     *        воспроизвести машину БЕЗ нативной библиотеки, не подменяя саму библиотеку.
-     */
-    internal fun select(
-        requested: String?,
-        isAvailable: (LinAlgBackend) -> Boolean = { it.isAvailable() },
-    ): LinAlgBackend {
-        if (!requested.isNullOrEmpty()) {
-            val backend = when (requested) {
-                "multik" -> MultikCpuBackend
-                "reference" -> ReferenceBackend
-                else -> error(
-                    "numerics.backend='$requested': неизвестный бэкенд; " +
-                        "допустимые значения — multik, reference"
-                )
+    internal fun resolve(mode: String?): LinAlgBackend =
+        when (val m = mode?.trim()?.lowercase()) {
+            null, "", "auto" -> if (isNativeAvailable()) native() else {
+                warnOnce()
+                java()
             }
-            check(isAvailable(backend)) {
-                "numerics.backend='$requested': бэкенд '${backend.name}' недоступен на этой машине " +
-                    "(нативная библиотека не загрузилась). Молчаливая подмена запрещена: она меняет " +
-                    "численные результаты. Уберите -Dnumerics.backend, чтобы разрешить авто-выбор " +
-                    "с откатом на '${ReferenceBackend.name}'."
-            }
-            return backend
+            "native" -> native()
+            "java" -> java()
+            else -> throw IllegalArgumentException(
+                "$PROPERTY='$m': недопустимое значение; допустимые — native, java, auto"
+            )
         }
-        return candidates.firstOrNull { isAvailable(it) } ?: ReferenceBackend
+
+    private val warned: Lazy<Unit> = lazy {
+        System.getLogger("numerics").log(
+            System.Logger.Level.WARNING,
+            "Нативная BLAS/LAPACK не найдена, используется реализация на Java; производительность ниже",
+        )
+    }
+
+    private fun warnOnce() = warned.value
+
+    /** Гасит информационные сообщения netlib о выбранной реализации (пишутся в stderr). */
+    private fun quietNetlibLogging() {
+        for (name in listOf(
+            "dev.ludovic.netlib",
+            "dev.ludovic.netlib.blas.InstanceBuilder",
+            "dev.ludovic.netlib.lapack.InstanceBuilder",
+        )) Logger.getLogger(name).level = Level.WARNING
     }
 }

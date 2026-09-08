@@ -10,11 +10,12 @@ repositories {
 }
 
 dependencies {
-    // Нативный бэкенд линейной алгебры (multik/OpenBLAS). Типы multik НЕ выходят
-    // в публичный API (`MultikCpuBackend` реализует наш `LinAlgBackend`), поэтому
-    // зависимость — `implementation`, а не `api`: потребителю она нужна лишь в runtime.
-    implementation("org.jetbrains.kotlinx:multik-core:0.2.3")
-    implementation("org.jetbrains.kotlinx:multik-default:0.2.3")
+    // Линейная алгебра через BLAS/LAPACK (netlib): нативная реализация берётся из системы
+    // (Accelerate, OpenBLAS, MKL), при её отсутствии используется переносимая реализация на Java.
+    // Типы netlib не выходят в публичный API (`NetlibBackend` реализует наш `LinAlgBackend`),
+    // поэтому зависимость — `implementation`, а не `api`: потребителю она нужна лишь в runtime.
+    implementation("dev.ludovic.netlib:blas:3.2.0")
+    implementation("dev.ludovic.netlib:lapack:3.2.0")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
@@ -26,18 +27,23 @@ kotlin {
     // Режим `explicitApi()` НЕ включён сознательно: он потребовал бы `public` на каждом
     // из ~150 объявлений, то есть массовой косметической правки поверх структурного
     // рефакторинга. Поверхность API описана в README (раздел «Публичный API»);
-    // внутренние детали (`DenseOps`, `Backends.select`) уже помечены `internal`.
+    // внутренние детали (`DenseOps`, `Backends.resolve`) уже помечены `internal`.
 }
 
 java {
     withSourcesJar()
 }
 
-// --- Бэкенд линейной алгебры в тестах -----------------------------------------
-// `Backends.select` при недоступности нативной библиотеки МОЛЧА откатывается на
-// `ReferenceBackend`. Явное значение делает выбор видимым; внешнее `-Dnumerics.backend=...`
-// уважается и позволяет прогонять тесты на обоих бэкендах.
-val numericsBackend: String = System.getProperty("numerics.backend") ?: "multik"
+// --- Реализация линейной алгебры в тестах -------------------------------------
+// Свойство `numerics.backend` выбирает реализацию BLAS/LAPACK: `native` — только
+// системная библиотека (ошибка, если не загрузилась), `java` — только переносимая
+// реализация на Java, `auto` — нативная при доступности, иначе Java с предупреждением.
+// Значение берётся из `-Pnumerics.backend=...` либо `-Dnumerics.backend=...`, по
+// умолчанию `auto`; так один и тот же набор тестов прогоняется на обеих реализациях.
+val numericsBackend: String =
+    (project.findProperty("numerics.backend") as String?)
+        ?: System.getProperty("numerics.backend")
+        ?: "auto"
 
 tasks.test {
     useJUnitPlatform { excludeTags("golden-generate") }

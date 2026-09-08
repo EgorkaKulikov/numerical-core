@@ -17,7 +17,7 @@ import numerics.backend.LinAlgBackend
  * [default], поэтому существующий код, которому безразличен бэкенд, не меняется.
  *
  * @property backend реализация линейной алгебры; по умолчанию — стартовый выбор
- *           [Backends.default] (нативный multik при доступности, иначе reference).
+ *           [Backends.default] (системная BLAS/LAPACK при доступности, иначе реализация на Java).
  * @property parallel разрешена ли параллельная сборка матриц
  *           ([ParallelAssembly]); на результат не влияет (сборка побитово
  *           идентична), влияет только на время.
@@ -56,7 +56,7 @@ data class NumericsContext(
          * который невозможно связать с причиной постфактум.
          *
          * Сравнение ПО ЗНАЧЕНИЮ ([NumericsContext] — `data class`), а не по ссылке: два
-         * независимо созданных `NumericsContext(backend = ReferenceBackend)` описывают одну
+         * независимо созданных `NumericsContext(backend = Backends.java())` описывают одну
          * и ту же конфигурацию и обязаны считаться совместимыми.
          *
          * @param owner имя класса-владельца для сообщения об ошибке.

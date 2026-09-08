@@ -1,6 +1,7 @@
 package numerics
 
 import numerics.backend.Backends
+import numerics.backend.LinAlgBackend
 import org.junit.jupiter.api.Tag
 import kotlin.random.Random
 import kotlin.test.Test
@@ -9,18 +10,17 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Перекрёстная проверка multik/OpenBLAS-бэкенда [LinearAlgebra] против
- * чистой ручной реализации [ReferenceLinearAlgebra].
- *
- * На псевдослучайных, но фиксированных по сидам данных оба бэкенда обязаны
- * совпадать с точностью до 1e-8: нативный OpenBLAS и ручной LU не должны
- * расходиться на хорошо обусловленных входах.
+ * Перекрёстная проверка реализаций [numerics.backend.Backends.java] и (при доступности)
+ * [numerics.backend.Backends.native] через фасад [LinearAlgebra] против независимого
+ * оракула [ReferenceOracle] на фиксированных по сидам данных с допуском 1e-8.
  */
 @Tag("fast")
+@Suppress("DEPRECATION")
 class LinearAlgebraVsReferenceTest {
 
     private val tol = 1e-8
     private val sizes = intArrayOf(3, 8, 20)
+    private val backends: List<LinAlgBackend> = Backends.available()
 
     private fun randMatrix(rnd: Random, rows: Int, cols: Int): Array<DoubleArray> =
         Array(rows) { DoubleArray(cols) { rnd.nextDouble(-1.0, 1.0) } }
@@ -65,67 +65,67 @@ class LinearAlgebraVsReferenceTest {
     /** matVec бэкенда совпадает с эталоном на размерах 3, 8, 20. */
     @Test
     fun matVecMatchesReference() {
-        for (n in sizes) {
+        for (backend in backends) for (n in sizes) {
             val rnd = Random(1000 + n)
             val a = randMatrix(rnd, n, n)
             val x = randVector(rnd, n)
-            assertVecEq(ReferenceLinearAlgebra.matVec(a, x), LinearAlgebra.matVec(a, x))
+            assertVecEq(ReferenceOracle.matVec(a, x), LinearAlgebra.matVec(a, x, backend))
         }
     }
 
     /** matTransVec бэкенда совпадает с эталоном (прямоугольные матрицы). */
     @Test
     fun matTransVecMatchesReference() {
-        for (n in sizes) {
+        for (backend in backends) for (n in sizes) {
             val rnd = Random(2000 + n)
             val a = randMatrix(rnd, n, n + 2)
             val y = randVector(rnd, n)
-            assertVecEq(ReferenceLinearAlgebra.matTransVec(a, y), LinearAlgebra.matTransVec(a, y))
+            assertVecEq(ReferenceOracle.matTransVec(a, y), LinearAlgebra.matTransVec(a, y, backend))
         }
     }
 
     /** matMat бэкенда совпадает с эталоном на прямоугольных множителях. */
     @Test
     fun matMatMatchesReference() {
-        for (n in sizes) {
+        for (backend in backends) for (n in sizes) {
             val rnd = Random(3000 + n)
             val a = randMatrix(rnd, n, n + 1)
             val b = randMatrix(rnd, n + 1, n + 3)
-            assertMatEq(ReferenceLinearAlgebra.matMat(a, b), LinearAlgebra.matMat(a, b))
+            assertMatEq(ReferenceOracle.matMat(a, b), LinearAlgebra.matMat(a, b, backend))
         }
     }
 
     /** atWa (A^T diag(w) A) бэкенда совпадает с эталоном. */
     @Test
     fun atWaMatchesReference() {
-        for (n in sizes) {
+        for (backend in backends) for (n in sizes) {
             val rnd = Random(4000 + n)
             val a = randMatrix(rnd, n + 2, n)
             val w = randVector(rnd, n + 2)
-            assertMatEq(ReferenceLinearAlgebra.atWa(a, w), LinearAlgebra.atWa(a, w))
+            assertMatEq(ReferenceOracle.atWa(a, w), LinearAlgebra.atWa(a, w, backend))
         }
     }
 
     /** addScaled (A + s*B) бэкенда совпадает с эталоном. */
     @Test
     fun addScaledMatchesReference() {
-        for (n in sizes) {
+        for (backend in backends) for (n in sizes) {
             val rnd = Random(5000 + n)
             val a = randMatrix(rnd, n, n)
             val b = randMatrix(rnd, n, n)
             val s = rnd.nextDouble(-2.0, 2.0)
-            assertMatEq(ReferenceLinearAlgebra.addScaled(a, b, s), LinearAlgebra.addScaled(a, b, s))
+            assertMatEq(ReferenceOracle.addScaled(a, b, s), LinearAlgebra.addScaled(a, b, s, backend))
         }
     }
 
     /** solve бэкенда совпадает с эталоном на хорошо обусловленных СЛАУ. */
     @Test
     fun solveMatchesReference() {
-        for (n in sizes) {
+        for (backend in backends) for (n in sizes) {
             val rnd = Random(6000 + n)
             val a = diagDominant(rnd, n)
             val b = randVector(rnd, n)
-            assertVecEq(ReferenceLinearAlgebra.solve(a, b), LinearAlgebra.solve(a, b))
+            assertVecEq(ReferenceOracle.solve(a, b), LinearAlgebra.solve(a, b, backend))
         }
     }
 
@@ -133,10 +133,7 @@ class LinearAlgebraVsReferenceTest {
      * Единая семантика вырожденности: на ТОЧНО вырожденной СЛАУ любого масштаба
      * ОБА бэкенда обязаны бросить исключение ОДНОГО ТИПА через фасад.
      *
-     * До переноса проверки в фасад это было неверно: `MultikCpuBackend.solve`
-     * контролировал только NaN/Inf, а LAPACK в части случаев возвращает конечный
-     * мусор. Прогонять обязательно НА ОБОИХ бэкендах
-     * (`-Dnumerics.backend=multik` и `-Dnumerics.backend=reference`).
+     * Прогоняется на всех доступных реализациях (`-Dnumerics.backend=native|java`).
      *
      * О ВЫБОРЕ КЕЙСА. Здесь именно ТОЧНО вырожденные матрицы (ранг < n),
      * а не плохо ОБУСЛОВЛЕННЫЕ (типа матрицы Гильберта): плохая обусловленность
@@ -204,7 +201,7 @@ class LinearAlgebraVsReferenceTest {
         val x: DoubleArray? = try {
             LinearAlgebra.solve(a, b)
         } catch (e: IllegalStateException) {
-            // Честный отказ — тоже допустимый исход контракта (так ведёт себя reference),
+            // Честный отказ — тоже допустимый исход контракта (так ведёт себя ручной LU оракула),
             // но и он обязан быть содержательным: сообщение называет причину.
             // Без этой проверки тест был бы тавтологией на бэкенде reference.
             assertTrue(

@@ -1,8 +1,8 @@
 # Непрерывная интеграция библиотеки numerical-core.
 #
 # Два job'а, оба быстрые (единицы секунд на тесты, ~1 мин с прогревом Gradle):
-#   test          — весь набор тестов на бэкенде по умолчанию (multik/OpenBLAS с
-#                   откатом на reference) и на чистом JVM-бэкенде, плюс отчёт Kover;
+#   test          — весь набор тестов на реализации по умолчанию (системная BLAS/LAPACK
+#                   с откатом на Java) и на Java-реализации netlib, плюс отчёт Kover;
 #   publish-check — локальная публикация артефакта и проверка, что jar, sources и
 #                   POM действительно легли в ~/.m2: это единственный способ
 #                   подключения библиотеки соседними репозиториями.
@@ -40,20 +40,18 @@ jobs:
       - name: Настройка Gradle с кэшем
         uses: gradle/actions/setup-gradle@v6
 
-      # ДИАГНОСТИКА БЭКЕНДА — первым прогоном. `Backends.select` при недоступности
-      # нативного OpenBLAS МОЛЧА откатывается на `ReferenceBackend`;
-      # `BackendSpiTest.multikCpuBackendIsAvailableHere` делает этот откат видимым.
+      # Диагностика реализации — первым прогоном: `BackendSpiTest` показывает, какая
+      # BLAS/LAPACK (системная или Java) загрузилась на раннере.
       - name: Диагностика активного бэкенда линейной алгебры
         run: ./gradlew test --tests 'numerics.backend.BackendSpiTest' --info
 
       - name: Тесты и покрытие (бэкенд по умолчанию)
         run: ./gradlew test koverXmlReport
 
-      # Тот же набор на чистом JVM-бэкенде: эквивалентность бэкендов — контракт
-      # библиотеки, и он обязан выполняться на обоих путях, а не только на том,
-      # который случайно оказался активным.
-      - name: Тесты на эталонном бэкенде
-        run: ./gradlew test -Dnumerics.backend=reference --rerun
+      # Тот же набор на Java-реализации netlib: согласие реализаций — контракт
+      # библиотеки, и он обязан выполняться на обоих путях.
+      - name: Тесты на Java-реализации BLAS/LAPACK
+        run: ./gradlew test -Dnumerics.backend=java --rerun
 
       - name: Отчёты тестов и покрытия
         if: always()

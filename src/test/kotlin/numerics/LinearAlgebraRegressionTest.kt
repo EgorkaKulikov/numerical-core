@@ -1,66 +1,49 @@
 package numerics
 
+import numerics.backend.Backends
+import numerics.backend.LinAlgBackend
+import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
-import kotlin.test.Test
+import org.junit.jupiter.api.TestFactory
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * REGRESSION-ТЕСТЫ обнаруженных и исправленных дефектов линейной алгебры.
- *
- * Каждый тест назван по дефекту и снабжён описанием: в чём была ошибка, почему она
- * не проявлялась в существующих тестах и что именно проверяется теперь. Все эти
- * тесты ПАДАЮТ на коде до исправления. Нумерация дефектов общая с репозиторием
- * `integral-equations` (`regression.DefectRegressionTest`), откуда эти два теста
- * выделены как относящиеся к слою линейной алгебры.
+ * Регрессионные тесты слоя линейной алгебры: вырожденность распознаётся независимо от
+ * масштаба данных, а нечисловой вход (NaN, бесконечность) отвергается исключением, а не
+ * молчаливым нечисловым ответом. Каждый случай гоняется на всех доступных реализациях.
  */
 @Tag("fast")
 class LinearAlgebraRegressionTest {
 
-    /**
-     * ДЕФЕКТ 4. Порог вырожденности в эталонной линейной алгебре был абсолютным
-     * (1e-300) и фактически проверял лишь строгий машинный ноль: практически
-     * вырожденная матрица решалась молча и возвращала бессмысленный результат.
-     *
-     * Теперь порог относителен норме матрицы, поэтому вырожденность распознаётся
-     * независимо от масштаба данных.
-     */
-    @Test
-    fun defect4_singularityDetectedRegardlessOfScale() {
+    private fun onAll(name: String, body: (LinAlgBackend) -> Unit): List<DynamicTest> =
+        Backends.available().map { b -> DynamicTest.dynamicTest("$name [${b.name}]") { body(b) } }
+
+    @TestFactory
+    fun singularityDetectedRegardlessOfScale() = onAll("масштаб") { backend ->
         for (scale in listOf(1.0, 1e6, 1e-6)) {
-            val singular = arrayOf(
-                doubleArrayOf(1.0 * scale, 2.0 * scale),
-                doubleArrayOf(2.0 * scale, 4.0 * scale),
-            )
-            assertFailsWith<IllegalStateException>("Масштаб $scale: вырожденность должна распознаваться") {
-                ReferenceLinearAlgebra.solve(singular, doubleArrayOf(1.0 * scale, 2.0 * scale))
+            val singular = arrayOf(doubleArrayOf(1.0 * scale, 2.0 * scale), doubleArrayOf(2.0 * scale, 4.0 * scale))
+            assertFailsWith<IllegalStateException>("Масштаб $scale") {
+                LinearAlgebra.solve(singular, doubleArrayOf(1.0 * scale, 2.0 * scale), backend)
             }
-        }
-        for (scale in listOf(1.0, 1e6, 1e-6)) {
-            val regular = arrayOf(
-                doubleArrayOf(1.0 * scale, 2.0 * scale),
-                doubleArrayOf(3.0 * scale, 4.0 * scale),
-            )
-            val solution = ReferenceLinearAlgebra.solve(regular, doubleArrayOf(1.0 * scale, 1.0 * scale))
-            assertTrue(solution.all { it.isFinite() }, "Масштаб $scale: решение должно быть конечным")
+            val regular = arrayOf(doubleArrayOf(1.0 * scale, 2.0 * scale), doubleArrayOf(3.0 * scale, 4.0 * scale))
+            val x = LinearAlgebra.solve(regular, doubleArrayOf(1.0 * scale, 1.0 * scale), backend)
+            assertTrue(x.all { it.isFinite() }, "Масштаб $scale: решение должно быть конечным")
         }
     }
 
-    /**
-     * ДЕФЕКТ 5. Бэкенды линейной алгебры расходились на нечисловом входе:
-     * multik/OpenBLAS бросал `IllegalStateException`, а эталонная реализация молча
-     * возвращала вектор из NaN. Наблюдаемое поведение обязано совпадать.
-     */
-    @Test
-    fun defect5_backendsAgreeOnNonFiniteInput() {
-        val withNaN = arrayOf(
-            doubleArrayOf(Double.NaN, 1.0),
-            doubleArrayOf(1.0, 1.0),
-        )
-        assertFailsWith<IllegalStateException>(
-            "Эталонная реализация обязана сигнализировать об ошибке так же, как нативный бэкенд",
-        ) {
-            ReferenceLinearAlgebra.solve(withNaN, doubleArrayOf(1.0, 1.0))
+    @TestFactory
+    fun nonFiniteInputRejected() = onAll("нечисловой вход") { backend ->
+        for (bad in listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY)) {
+            val a = arrayOf(doubleArrayOf(bad, 1.0), doubleArrayOf(1.0, 1.0))
+            val ex = assertFailsWith<IllegalStateException>("A содержит $bad") {
+                LinearAlgebra.solve(a, doubleArrayOf(1.0, 1.0), backend)
+            }
+            assertTrue(ex.message!!.contains("нечисловые"), ex.message)
+            val good = arrayOf(doubleArrayOf(2.0, 1.0), doubleArrayOf(1.0, 3.0))
+            assertFailsWith<IllegalStateException>("b содержит $bad") {
+                LinearAlgebra.solve(good, doubleArrayOf(bad, 1.0), backend)
+            }
         }
     }
 }

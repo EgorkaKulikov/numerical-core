@@ -1,6 +1,6 @@
 package numerics
 
-import numerics.backend.ReferenceBackend
+import numerics.backend.Backends
 import org.junit.jupiter.api.Tag
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,19 +33,19 @@ class NumericsContextTest {
     /** Равенство контекстов — ПО ЗНАЧЕНИЮ: два одинаково настроенных контекста совместимы. */
     @Test
     fun contextEqualityIsByValue() {
-        assertEquals(NumericsContext(backend = ReferenceBackend), NumericsContext(backend = ReferenceBackend))
+        assertEquals(NumericsContext(backend = Backends.java()), NumericsContext(backend = Backends.java()))
         assertTrue(NumericsContext(parallel = false) != NumericsContext(parallel = true))
     }
 
     /** [NumericsContext.requireSame] принимает равные по значению контексты и отвергает разные. */
     @Test
     fun requireSameAcceptsEqualAndRejectsDifferent() {
-        val a = NumericsContext(backend = ReferenceBackend, parallel = false)
-        val b = NumericsContext(backend = ReferenceBackend, parallel = false)
+        val a = NumericsContext(backend = Backends.java(), parallel = false)
+        val b = NumericsContext(backend = Backends.java(), parallel = false)
         NumericsContext.requireSame("Owner", a, "dep", b)
 
         val ex = assertFailsWith<IllegalArgumentException> {
-            NumericsContext.requireSame("Owner", a, "dep", NumericsContext(backend = ReferenceBackend, parallel = true))
+            NumericsContext.requireSame("Owner", a, "dep", NumericsContext(backend = Backends.java(), parallel = true))
         }
         assertTrue(ex.message!!.contains("Owner"), "сообщение обязано называть владельца: ${ex.message}")
         assertTrue(ex.message!!.contains("'dep'"), "сообщение обязано называть зависимость: ${ex.message}")
