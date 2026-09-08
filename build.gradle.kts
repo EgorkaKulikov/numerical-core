@@ -130,3 +130,18 @@ publishing {
         // }
     }
 }
+
+// Микробенчмарк публичного API (не входит в артефакт и в test).
+val benchmark: SourceSet by sourceSets.creating {
+    compileClasspath += sourceSets["main"].output + configurations["runtimeClasspath"]
+    runtimeClasspath += output + compileClasspath
+}
+tasks.register<JavaExec>("benchmark") {
+    description = "Микробенчмарк публичного API; размеры матриц — через -Pbench.args=\"256 1024\""
+    group = "verification"
+    classpath = benchmark.runtimeClasspath
+    mainClass.set("numerics.bench.BenchKt")
+    maxHeapSize = "4g"
+    args = (project.findProperty("bench.args") as String? ?: "256 1024").split(" ").filter { it.isNotBlank() }
+    systemProperty("numerics.backend", numericsBackend)
+}
