@@ -5,8 +5,9 @@ import numerics.backend.Backends
 import numerics.backend.LinAlgBackend
 
 /**
- * Линейная алгебра над [Array]<[DoubleArray]> — тонкий фасад над подключаемым
- * бэкендом (SPI).
+ * Линейная алгебра над плотными матрицами — тонкий фасад над подключаемым
+ * бэкендом (SPI). Основной тип матриц — [DenseMatrix] (плоский столбцовый формат);
+ * перегрузки на [Array]<[DoubleArray]> сохранены как адаптеры с копией.
  *
  * Публичный API стабилен (массивы Kotlin) и не зависит от выбранной реализации.
  * Тяжёлые операции (умножения и решение СЛАУ) делегируются бэкенду, переданному
@@ -59,6 +60,11 @@ object LinearAlgebra {
     }
 
     /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
+    @Deprecated(
+        "Используйте перегрузку с DenseMatrix",
+        ReplaceWith("matMat(DenseMatrix.fromRows(a), DenseMatrix.fromRows(b), backend)"),
+        DeprecationLevel.WARNING,
+    )
     fun matMat(
         a: Array<DoubleArray>,
         b: Array<DoubleArray>,
@@ -71,6 +77,11 @@ object LinearAlgebra {
     }
 
     /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
+    @Deprecated(
+        "Используйте перегрузку с DenseMatrix",
+        ReplaceWith("atWa(DenseMatrix.fromRows(a), w, backend)"),
+        DeprecationLevel.WARNING,
+    )
     fun atWa(
         a: Array<DoubleArray>,
         w: DoubleArray,
@@ -82,6 +93,11 @@ object LinearAlgebra {
     }
 
     /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
+    @Deprecated(
+        "Используйте перегрузку с DenseMatrix",
+        ReplaceWith("addScaled(DenseMatrix.fromRows(a), DenseMatrix.fromRows(b), s, backend)"),
+        DeprecationLevel.WARNING,
+    )
     fun addScaled(
         a: Array<DoubleArray>,
         b: Array<DoubleArray>,
@@ -310,6 +326,11 @@ object LinearAlgebra {
      * Разложение Холецкого A = L L^T для симметричной положительно определённой A.
      * @return нижнетреугольная L или null, если A не положительно определена.
      */
+    @Deprecated(
+        "Используйте перегрузку с DenseMatrix",
+        ReplaceWith("cholesky(DenseMatrix.fromRows(a))"),
+        DeprecationLevel.WARNING,
+    )
     fun cholesky(a: Array<DoubleArray>): Array<DoubleArray>? = DenseOps.cholesky(a)
 
     /**
@@ -331,4 +352,83 @@ object LinearAlgebra {
         }
         return DenseOps.maxAsymmetry(a)
     }
+
+    // --- Перегрузки на DenseMatrix (основной тип матриц) ----------------------
+    // временно: до перевода бэкенда на плоский формат — перекладка через
+    // toRows()/fromRows() в существующий путь над Array<DoubleArray>.
+
+    /** Создаёт нулевую матрицу rows x cols в плоском столбцовом формате. */
+    fun zerosMatrix(rows: Int, cols: Int): DenseMatrix = DenseMatrix.zeros(rows, cols)
+
+    /** Единичная матрица n x n в плоском столбцовом формате. */
+    fun identityMatrix(n: Int): DenseMatrix = DenseMatrix.identity(n)
+
+    /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
+    fun matVec(
+        a: DenseMatrix,
+        x: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): DoubleArray = matVec(a.toRows(), x, backend)
+
+    /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
+    fun matTransVec(
+        a: DenseMatrix,
+        y: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): DoubleArray = matTransVec(a.toRows(), y, backend)
+
+    /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
+    @Suppress("DEPRECATION")
+    fun matMat(
+        a: DenseMatrix,
+        b: DenseMatrix,
+        backend: LinAlgBackend = Backends.default(),
+    ): DenseMatrix = DenseMatrix.fromRows(matMat(a.toRows(), b.toRows(), backend))
+
+    /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
+    @Suppress("DEPRECATION")
+    fun atWa(
+        a: DenseMatrix,
+        w: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): DenseMatrix = DenseMatrix.fromRows(atWa(a.toRows(), w, backend))
+
+    /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
+    @Suppress("DEPRECATION")
+    fun addScaled(
+        a: DenseMatrix,
+        b: DenseMatrix,
+        s: Double,
+        backend: LinAlgBackend = Backends.default(),
+    ): DenseMatrix = DenseMatrix.fromRows(addScaled(a.toRows(), b.toRows(), s, backend))
+
+    /**
+     * Решение плотной СЛАУ A x = b через переданный бэкенд; контракт тот же, что у
+     * перегрузки над [Array]<[DoubleArray]>, включая постпроверку невязки.
+     * @throws IllegalStateException при вырожденности.
+     */
+    fun solve(
+        a: DenseMatrix,
+        b: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+    ): DoubleArray = solve(a.toRows(), b, backend)
+
+    /** Решает A x = b и оценивает прямую ошибку; контракт тот же, что у перегрузки над [Array]<[DoubleArray]>. */
+    fun solveDiagnosed(
+        a: DenseMatrix,
+        b: DoubleArray,
+        backend: LinAlgBackend = Backends.default(),
+        source: ConditionSource = ConditionSource.INVERSION,
+        tolerance: Double = Conditioning.INVERSION_RESIDUAL_TOLERANCE,
+    ): DiagnosedSolution = solveDiagnosed(a.toRows(), b, backend, source, tolerance)
+
+    /**
+     * Разложение Холецкого A = L L^T для симметричной положительно определённой A.
+     * @return нижнетреугольная L или null, если A не положительно определена.
+     */
+    @Suppress("DEPRECATION")
+    fun cholesky(a: DenseMatrix): DenseMatrix? = cholesky(a.toRows())?.let { DenseMatrix.fromRows(it) }
+
+    /** Симметрия: max|A - A^T|; требует непустую квадратную A. */
+    fun maxAsymmetry(a: DenseMatrix): Double = maxAsymmetry(a.toRows())
 }

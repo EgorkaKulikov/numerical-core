@@ -84,4 +84,36 @@ object ParallelAssembly {
         }
         return result
     }
+
+    /**
+     * Собирает матрицу [rows] x [cols] в плоском столбцовом формате [DenseMatrix],
+     * вычисляя каждую ячейку через [cellFn].
+     *
+     * Единица параллелизма — столбец: одна задача заполняет непрерывный отрезок
+     * `data[j * rows until (j + 1) * rows]`, и разные задачи никогда не касаются
+     * одних и тех же ячеек, поэтому гонок данных нет. При [parallel]`=true` столбцы
+     * идут параллельно, иначе — последовательным циклом; результат побитово одинаков
+     * в обоих режимах и совпадает с [assembleMatrix] после [DenseMatrix.fromRows].
+     *
+     * @throws IllegalArgumentException при отрицательных размерах.
+     */
+    fun assembleDense(
+        rows: Int,
+        cols: Int,
+        parallel: Boolean = true,
+        cellFn: (Int, Int) -> Double,
+    ): DenseMatrix {
+        require(rows >= 0 && cols >= 0) { "assembleDense: размеры не могут быть отрицательными: $rows x $cols" }
+        val data = DoubleArray(rows * cols)
+        val body: (Int) -> Unit = { j ->
+            val base = j * rows
+            for (i in 0 until rows) data[base + i] = cellFn(i, j)
+        }
+        if (parallel) {
+            IntStream.range(0, cols).parallel().forEach { j -> body(j) }
+        } else {
+            for (j in 0 until cols) body(j)
+        }
+        return DenseMatrix.fromColumnMajor(rows, cols, data)
+    }
 }
