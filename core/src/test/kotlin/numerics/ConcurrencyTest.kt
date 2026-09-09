@@ -21,13 +21,22 @@ import kotlin.test.assertTrue
 
 /**
  * Потокобезопасность: реализации BLAS/LAPACK, реестр реализаций, квадратура и контекст
- * не имеют изменяемого общего состояния — параллельные вызовы дают побитово те же ответы,
- * что и последовательные, а ленивые синглтоны создаются ровно один раз.
+ * не имеют изменяемого общего состояния — параллельные вызовы дают те же ответы, что и
+ * последовательные, а ленивые синглтоны создаются ровно один раз.
+ *
+ * Для реализации на Java результаты совпадают побитово; нативные многопоточные библиотеки
+ * (Accelerate, OpenBLAS, MKL) воспроизводят результат с точностью до порядка редукций —
+ * расхождение не превышает нескольких единиц младшего разряда, поэтому для них результаты
+ * сравниваются с относительным допуском [nativeTol] (см. `docs/ТОЧНОСТЬ.md`,
+ * «Воспроизводимость на многопоточных реализациях»).
  */
 @Tag("fast")
 class ConcurrencyTest {
 
     private val timeout: Duration = Duration.ofSeconds(60)
+
+    /** Допуск для нативных реализаций: относительно `max(‖expected‖∞, 1)`. */
+    private val nativeTol: Double = 1e-13
 
     /** Запускает [tasks] на пуле из [threads] потоков со стартом по общему сигналу; возвращает результаты. */
     private fun <T> runAll(threads: Int, tasks: List<() -> T>): List<T> {
@@ -54,22 +63,40 @@ class ConcurrencyTest {
         }
     }
 
-    private fun assertBitwise(expected: DoubleArray, actual: DoubleArray, what: String) {
-        assertTrue(expected.contentEquals(actual), "$what: результат из потока отличается побитово")
+    /**
+     * Сравнивает результат из рабочего потока с результатом главного потока: побитово для
+     * реализации на Java, с относительным допуском [nativeTol] для нативных реализаций.
+     */
+    private fun assertSameResult(expected: DoubleArray, actual: DoubleArray, backend: LinAlgBackend, label: String) {
+        val tag = "$label [${backend.name}]"
+        assertTrue(expected.size == actual.size, "$tag: размер ${actual.size} != ${expected.size}")
+        if (!backend.isNative) {
+            assertTrue(expected.contentEquals(actual), "$tag: результат из потока отличается побитово")
+            return
+        }
+        var maxDiff = 0.0
+        var scale = 1.0
+        for (i in expected.indices) {
+            maxDiff = maxOf(maxDiff, abs(expected[i] - actual[i]))
+            scale = maxOf(scale, abs(expected[i]))
+        }
+        val rel = maxDiff / scale
+        if (maxDiff != 0.0) println("$tag: не побитово, max|Δ| = $maxDiff (отн. $rel)")
+        assertTrue(rel <= nativeTol, "$tag: относительное расхождение $rel > $nativeTol")
     }
 
     private fun perBackend(name: String, body: (LinAlgBackend) -> Unit): List<DynamicTest> =
         Backends.available().map { b -> dynamicTest("$name [${b.name}]") { body(b) } }
 
     @TestFactory
-    fun solveFromEightThreadsIsBitwiseReproducible(): List<DynamicTest> = perBackend("solve 8×20") { b ->
+    fun solveFromEightThreadsIsReproducible(): List<DynamicTest> = perBackend("solve 8×20") { b ->
         assertTimeoutPreemptively(timeout) {
             val a = GoldenInputs.dd(64)
             val rhs = GoldenInputs.vec(64)
             val expected = LinearAlgebra.solve(a, rhs, b)
             val results = runAll(8, List(8) { { List(20) { LinearAlgebra.solve(a, rhs, b) } } })
             results.forEachIndexed { t, list ->
-                list.forEachIndexed { k, x -> assertBitwise(expected, x, "поток $t, итерация $k") }
+                list.forEachIndexed { k, x -> assertSameResult(expected, x, b, "поток $t, итерация $k") }
             }
         }
     }
@@ -87,19 +114,11 @@ class ConcurrencyTest {
                 List(4) { { "solve" to LinearAlgebra.solve(a, rhs, b) } } +
                     List(4) { { "matMat" to LinearAlgebra.matMat(a, s, b).data } } +
                     List(4) { { "eig" to Conditioning.symmetricEigenvalues(s, b) } }
-            val eigTol = 1e-12 * eSeq.maxOf { abs(it) }
             for ((kind, r) in runAll(12, tasks)) {
                 when (kind) {
-                    "solve" -> assertBitwise(xSeq, r, kind)
-                    "matMat" -> assertBitwise(pSeq, r, kind)
-                    // Спектр нативной LAPACK (Accelerate) под нагрузкой воспроизводится не побитово,
-                    // а с точностью округления — сравниваем с допуском 1e-12 относительно max|λ|.
-                    else -> {
-                        var maxDiff = 0.0
-                        for (i in eSeq.indices) maxDiff = maxOf(maxDiff, abs(eSeq[i] - r[i]))
-                        if (!eSeq.contentEquals(r)) println("eig [${b.name}]: не побитово, max|Δλ| = $maxDiff")
-                        assertTrue(maxDiff <= eigTol, "eig: max|Δλ| = $maxDiff > $eigTol")
-                    }
+                    "solve" -> assertSameResult(xSeq, r, b, kind)
+                    "matMat" -> assertSameResult(pSeq, r, b, kind)
+                    else -> assertSameResult(eSeq, r, b, kind)
                 }
             }
         }
