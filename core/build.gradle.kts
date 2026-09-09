@@ -50,6 +50,14 @@ val numericsBackend: String =
 tasks.test {
     useJUnitPlatform { excludeTags("golden-generate") }
     systemProperty("numerics.backend", numericsBackend)
+    // Проброс переключателей netlib в тестовую JVM: `-Ddev.ludovic.netlib.{blas,lapack}.allowNative=false`
+    // принудительно включает F2J и позволяет локально воспроизвести CI без системной BLAS/LAPACK.
+    listOf("dev.ludovic.netlib.lapack.allowNative", "dev.ludovic.netlib.blas.allowNative").forEach { key ->
+        System.getProperty(key)?.let { systemProperty(key, it) }
+    }
+    // Многопоточные LU-разложения системного OpenBLAS используют стек вызывающего
+    // потока; стандартного размера может не хватить.
+    jvmArgs("-Xss8m")
 }
 
 /**
@@ -67,6 +75,14 @@ tasks.register<Test>("fastTest") {
         excludeTags("golden-generate")
     }
     systemProperty("numerics.backend", numericsBackend)
+    // Проброс переключателей netlib в тестовую JVM: `-Ddev.ludovic.netlib.{blas,lapack}.allowNative=false`
+    // принудительно включает F2J и позволяет локально воспроизвести CI без системной BLAS/LAPACK.
+    listOf("dev.ludovic.netlib.lapack.allowNative", "dev.ludovic.netlib.blas.allowNative").forEach { key ->
+        System.getProperty(key)?.let { systemProperty(key, it) }
+    }
+    // Многопоточные LU-разложения системного OpenBLAS используют стек вызывающего
+    // потока; стандартного размера может не хватить.
+    jvmArgs("-Xss8m")
 }
 
 /**
@@ -83,6 +99,9 @@ tasks.register<Test>("regenerateGolden") {
     systemProperty("golden.dir", layout.projectDirectory.dir("src/test/resources/golden").asFile.absolutePath)
     systemProperty("golden.version", project.version.toString())
     systemProperty("numerics.backend", numericsBackend)
+    // Многопоточные LU-разложения системного OpenBLAS используют стек вызывающего
+    // потока; стандартного размера может не хватить.
+    jvmArgs("-Xss8m")
     outputs.upToDateWhen { false }
 }
 

@@ -100,7 +100,11 @@ class CoverageGapsTest {
     fun `Backends resolve available describe`() {
         assertFalse(Backends.resolve("java").isNative)
         assertFalse(Backends.resolve(" JAVA ").isNative)
-        assertTrue(Backends.resolve("native").isNative)
+        if (Backends.isNativeAvailable()) {
+            assertTrue(Backends.resolve("native").isNative)
+        } else {
+            assertFailsWith<IllegalStateException> { Backends.resolve("native") }
+        }
         assertEquals(Backends.resolve(null).name, Backends.resolve("auto").name)
         assertEquals(Backends.resolve("").name, Backends.resolve("auto").name)
         val e = assertFailsWith<IllegalArgumentException> { Backends.resolve("bogus") }
@@ -108,6 +112,7 @@ class CoverageGapsTest {
         val av = Backends.available()
         assertEquals(if (Backends.isNativeAvailable()) 2 else 1, av.size)
         assertFalse(av.last().isNative)
+        if (!Backends.isNativeAvailable()) assertEquals(Backends.java(), av.single())
         assertTrue(Backends.describe().contains("numerics.backend="), Backends.describe())
         assertEquals(Backends.describe(), Backends.describe())
     }

@@ -57,6 +57,10 @@ jobs:
 
       - name: Тесты на реализации ${{ matrix.backend }}
         run: ./gradlew :numerical-core:test :numerical-core-openblas:test -Dnumerics.backend=${{ matrix.backend }} --no-daemon
+        env:
+          # Ограничение потоков системного OpenBLAS (как в модуле openblas): многопоточный
+          # dgetrf на стандартном стеке потока валил тестовую JVM (exit 139).
+          OPENBLAS_NUM_THREADS: 4
 
       # Отчёт о покрытии и его планка снимаются один раз, на самом воспроизводимом
       # варианте матрицы (Ubuntu, чистая JVM-реализация).
@@ -73,6 +77,7 @@ jobs:
             core/build/reports/kover/report.xml
             core/build/test-results/
             openblas/build/test-results/
+            **/hs_err_pid*.log
           if-no-files-found: ignore
 
   publish-check:
