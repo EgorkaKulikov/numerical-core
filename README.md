@@ -47,12 +47,19 @@ BLAS/LAPACK целевой системы (Intel MKL, AMD AOCL, OpenBLAS, Apple 
 
 ## Подключение
 
-Требуется JDK 21 или новее. Артефакты публикуются в локальный репозиторий Maven:
-
-    ./gradlew publishToMavenLocal
+Требуется JDK 21 или новее. Артефакты публикуются в GitHub Packages:
 
 ```kotlin
-repositories { mavenLocal(); mavenCentral() }
+repositories {
+    mavenCentral()
+    maven {
+        url = uri("https://maven.pkg.github.com/EgorkaKulikov/numerical-core")
+        credentials {
+            username = providers.gradleProperty("gpr.user").orNull ?: System.getenv("GITHUB_ACTOR")
+            password = providers.gradleProperty("gpr.token").orNull ?: System.getenv("GITHUB_TOKEN")
+        }
+    }
+}
 
 dependencies {
     implementation("io.github.egorkakulikov:numerical-core:1.0.0")
@@ -60,6 +67,13 @@ dependencies {
     implementation("io.github.egorkakulikov:numerical-core-openblas:1.0.0")
 }
 ```
+
+GitHub Packages требует аутентификации и для чтения: нужен токен GitHub с правом `read:packages`,
+указанный в `~/.gradle/gradle.properties` (`gpr.user`, `gpr.token`) или в переменных окружения;
+в GitHub Actions подходит встроенный `GITHUB_TOKEN`.
+
+Для локальной разработки библиотеку можно положить в локальный репозиторий Maven командой
+`./gradlew publishToMavenLocal` и добавить `mavenLocal()` в `repositories`.
 
 ## Пример
 

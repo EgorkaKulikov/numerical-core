@@ -1,6 +1,6 @@
 # Непрерывная интеграция numerical-core.
 #
-# Две задачи:
+# Три задачи:
 #   * test — тесты на матрице «операционная система × реализация BLAS/LAPACK».
 #     Реализация задаётся свойством `numerics.backend` (java — чистая JVM-реализация
 #     netlib F2J, native — системные BLAS/LAPACK через JNI). На Ubuntu системные
@@ -11,11 +11,14 @@
 #     реализации по умолчанию с запрошенным значением свойства.
 #   * publish-check — публикация в локальный репозиторий Maven и проверка состава
 #     артефакта и его POM.
+#   * publish — публикация обоих артефактов в GitHub Packages. Выполняется только
+#     при отправке тега вида vX.Y.Z и после успеха двух предыдущих задач.
 name: CI
 
 on:
   push:
     branches: ['**']
+    tags: ['v*']
   pull_request:
 
 # Новый запуск на той же ветке отменяет предыдущий незавершённый.
@@ -124,3 +127,31 @@ jobs:
           grep -q '<artifactId>numerical-core</artifactId>' "$pom2" || { echo "POM openblas не объявляет зависимость numerical-core"; exit 1; }
           grep -q 'openblas-platform' "$pom2" || { echo "POM openblas не объявляет зависимость openblas-platform"; exit 1; }
           echo "артефакт $group:numerical-core-openblas:$version опубликован корректно"
+
+  publish:
+    name: Публикация в GitHub Packages
+    # Только по тегу версии: отправка в ветки артефакты не публикует.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, publish-check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установка JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Настройка Gradle с кэшем
+        uses: gradle/actions/setup-gradle@v4
+
+      # Учётные данные для GitHub Packages: имя запустившего и встроенный токен рабочего процесса.
+      - name: Публикация обоих артефактов в GitHub Packages
+        run: ./gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

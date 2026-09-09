@@ -139,8 +139,9 @@ tasks.dokkaHtml {
 
 // --- Публикация ---------------------------------------------------------------
 // Локальная проверка: ./gradlew publishToMavenLocal
-// Удалённый репозиторий не задан: точка настройки — `repositories { maven { ... } }`
-// ниже, адрес и учётные данные берутся из свойств Gradle/переменных окружения.
+// Удалённый репозиторий — GitHub Packages. Учётные данные берутся из переменных
+// окружения GITHUB_ACTOR/GITHUB_TOKEN (CI) или свойств Gradle gpr.user/gpr.token;
+// при их отсутствии publishToMavenLocal работает как прежде.
 publishing {
     publications {
         create<MavenPublication>("maven") {
@@ -176,12 +177,14 @@ publishing {
         }
     }
     repositories {
-        // Пример подключения удалённого репозитория (раскомментировать и задать свойства):
-        // maven {
-        //     name = "remote"
-        //     url = uri(providers.gradleProperty("publishUrl").getOrElse(""))
-        //     credentials(PasswordCredentials::class) // remoteUsername / remotePassword
-        // }
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/EgorkaKulikov/numerical-core")
+            credentials {
+                username = providers.environmentVariable("GITHUB_ACTOR").orNull ?: providers.gradleProperty("gpr.user").orNull
+                password = providers.environmentVariable("GITHUB_TOKEN").orNull ?: providers.gradleProperty("gpr.token").orNull
+            }
+        }
     }
 }
 

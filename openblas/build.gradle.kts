@@ -60,4 +60,14 @@ publishing {
             }
         }
     }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/EgorkaKulikov/numerical-core")
+            credentials {
+                username = providers.environmentVariable("GITHUB_ACTOR").orNull ?: providers.gradleProperty("gpr.user").orNull
+                password = providers.environmentVariable("GITHUB_TOKEN").orNull ?: providers.gradleProperty("gpr.token").orNull
+            }
+        }
+    }
 }
