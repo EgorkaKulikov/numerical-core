@@ -53,13 +53,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev
 
       - name: Тесты на реализации ${{ matrix.backend }}
-        run: ./gradlew test -Dnumerics.backend=${{ matrix.backend }} --no-daemon
+        run: ./gradlew :numerical-core:test :numerical-core-openblas:test -Dnumerics.backend=${{ matrix.backend }} --no-daemon
 
       # Отчёт о покрытии и его планка снимаются один раз, на самом воспроизводимом
       # варианте матрицы (Ubuntu, чистая JVM-реализация).
       - name: Покрытие (Kover) и его планка
         if: matrix.os == 'ubuntu-latest' && matrix.backend == 'java'
-        run: ./gradlew koverXmlReport koverVerify -Dnumerics.backend=java --no-daemon
+        run: ./gradlew :numerical-core:koverXmlReport :numerical-core:koverVerify -Dnumerics.backend=java --no-daemon
 
       - name: Отчёты тестов и покрытия
         if: always()
@@ -67,8 +67,9 @@ jobs:
         with:
           name: reports-${{ matrix.os }}-${{ matrix.backend }}
           path: |
-            build/reports/kover/report.xml
-            build/test-results/
+            core/build/reports/kover/report.xml
+            core/build/test-results/
+            openblas/build/test-results/
           if-no-files-found: ignore
 
   publish-check:
@@ -110,3 +111,13 @@ jobs:
             echo "POM содержит зависимость на multik"; exit 1
           fi
           echo "артефакт $group:numerical-core:$version опубликован корректно"
+          # Второй артефакт: упакованная OpenBLAS. Обязан зависеть от ядра и от openblas-platform.
+          dir2="$HOME/.m2/repository/$group/numerical-core-openblas/$version"
+          ls -la "$dir2"
+          for f in "numerical-core-openblas-$version.jar" "numerical-core-openblas-$version-sources.jar" "numerical-core-openblas-$version.pom"; do
+            test -s "$dir2/$f" || { echo "отсутствует $dir2/$f"; exit 1; }
+          done
+          pom2="$dir2/numerical-core-openblas-$version.pom"
+          grep -q '<artifactId>numerical-core</artifactId>' "$pom2" || { echo "POM openblas не объявляет зависимость numerical-core"; exit 1; }
+          grep -q 'openblas-platform' "$pom2" || { echo "POM openblas не объявляет зависимость openblas-platform"; exit 1; }
+          echo "артефакт $group:numerical-core-openblas:$version опубликован корректно"

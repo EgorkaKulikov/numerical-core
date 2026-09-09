@@ -11,3 +11,6 @@ build/
 /*-err.txt
 # База jqwik с seed-ами упавших property-тестов
 /.jqwik-database
+/core/.jqwik-database
+# Кэш Kotlin-плагина в подпроектах
+/*/.kotlin/

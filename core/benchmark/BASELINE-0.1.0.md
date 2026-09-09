@@ -3,7 +3,7 @@
 Микробенчмарк публичного API (`LinearAlgebra.solve/matMat/matVec/matTransVec/atWa`,
 `Conditioning.conditionInf/symmetricEigenvalues`) на версии 0.1.0 до переработки; входы детерминированы
 (`java.util.Random(1000 + n)`, диагонально доминирующие матрицы). Машина: Apple M1 Pro, 8 ядер, macOS, JDK 21,
-бэкенд по умолчанию (multik 0.2.3 / OpenBLAS). Повторить: `./gradlew benchmark -Pbench.args="256 512 1024 2048"`
+бэкенд по умолчанию (multik 0.2.3 / OpenBLAS). Повторить: `./gradlew :numerical-core:benchmark -Pbench.args="256 512 1024 2048"`
 (исходник — `src/benchmark/kotlin/numerics/bench/Bench.kt`, source-set `benchmark`, в артефакт не входит).
 
 ## Результат
