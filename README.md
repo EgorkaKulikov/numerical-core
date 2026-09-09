@@ -29,36 +29,6 @@ MKL, OpenBLAS, Accelerate и на переносимой Java-реализаци
 параллельная сборка матриц с побитово воспроизводимым результатом, наблюдаемый порядок сходимости
 только по тем измерениям, которые выше шума округления.
 
-## Пример
-
-```kotlin
-import numerics.*
-import kotlin.math.*
-
-fun main() {
-    // Собрать матрицу и правую часть.
-    val a = DenseMatrix.fromRows(arrayOf(
-        doubleArrayOf( 2.0, -1.0,  0.0),
-        doubleArrayOf(-1.0,  2.0, -1.0),
-        doubleArrayOf( 0.0, -1.0,  2.0),
-    ))
-    val b = doubleArrayOf(1.0, 0.0, 1.0)
-    // Решить: вырожденная или нечисловая система отвергается исключением.
-    val x: DoubleArray = LinearAlgebra.solve(a, b)
-    // Решить и узнать, на сколько знаков верить ответу.
-    val d = LinearAlgebra.solveDiagnosed(a, b, source = ConditionSource.ESTIMATE)
-    when (val e = d.forwardError) {
-        is ForwardError.Bounded       -> println("‖x − x*‖/‖x*‖ ≤ ${e.relativeBound}, cond ≈ ${e.cond}")
-        is ForwardError.NoFiniteBound -> println("система численно вырождена, ω = ${e.backwardError}")
-        is ForwardError.Unreliable    -> println("обусловленность не определена достоверно")
-    }
-    // Число обусловленности: оценка LAPACK за O(n²); null, если ей нельзя верить.
-    val cond: Double? = Conditioning.conditionEstimate(a).valueOrNull()
-    // Проинтегрировать: ∫₀^π sin t dt = 2.
-    val integral = GaussLegendre(8).integrate(doubleArrayOf(0.0, PI / 2, PI)) { t -> sin(t) }
-}
-```
-
 ## Подключение
 
 JDK 21 или новее. Зависимость — `io.github.egorkakulikov:numerical-core:1.0.0` из GitHub Packages; для чтения
@@ -77,22 +47,10 @@ maven {
 Если на машине нет BLAS/LAPACK, добавьте `io.github.egorkakulikov:numerical-core-openblas:1.0.0` и
 вызовите `OpenBlas.install()` до первого обращения к библиотеке — она распакует OpenBLAS для текущей платформы.
 
-## Что внутри
+## Документация
 
-`DenseMatrix` — матрица в формате LAPACK: уходит в нативную библиотеку без переупорядочения, исходные данные не изменяются.
-`LinearAlgebra` — решить систему, умножить, взять норму, разложить по Холецкому. `Conditioning` — узнать,
-сколько знаков в решении верны: число обусловленности, спектр симметричной матрицы, обратная и прямая
-ошибка. `GaussLegendre` — проинтегрировать по произвольному разбиению отрезка. `ParallelAssembly` —
-собрать матрицу на всех ядрах с тем же результатом, что и в один поток. `Measured` — отделить измеренное
-от шума округления и взять порядок сходимости по достоверным точкам. API — `./gradlew :numerical-core:dokkaHtml`.
-
-## Проверить самому
-
-`./gradlew build` прогоняет тесты и порог покрытия; `-Dnumerics.backend=java|native` выбирает реализацию,
-в CI прогоняются обе. Тесты — эталоны поведения на фиксированных входах, свойства на случайных матрицах
-против двух независимых оракулов, граничные случаи, параллельные вызовы. Измерения производительности —
-`./gradlew :numerical-core:benchmark -Pbench.args="256 1024"`. Подробности: `docs/ТОЧНОСТЬ.md` (пороги и их
-обоснование), `docs/ПРОИЗВОДИТЕЛЬНОСТЬ.md` (путь данных, потоки, таблица измерений), `docs/ИСТОЧНИКИ.md` (алгоритмы).
+`docs/ТОЧНОСТЬ.md` — пороги и их обоснование; `docs/ПРОИЗВОДИТЕЛЬНОСТЬ.md` — путь данных, потоки, измерения;
+`docs/ИСТОЧНИКИ.md` — алгоритмы; API — `./gradlew :numerical-core:dokkaHtml`.
 
 ## Лицензия
 
