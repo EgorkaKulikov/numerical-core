@@ -259,7 +259,7 @@ class EdgeCasesTest {
     fun measuredBoundaries(): List<DynamicTest> = listOf(
         dynamicTest("measured(-0.0) — AtNoiseLevel, как 0.0") { assertIs<Measured.AtNoiseLevel>(measured(-0.0)) },
         dynamicTest("measured(Double.MIN_VALUE) — AtNoiseLevel") { assertIs<Measured.AtNoiseLevel>(measured(Double.MIN_VALUE)) },
-        dynamicTest("measured(1e-13, 1e-13) — граница ВКЛЮЧЕНА: |value| >= threshold считается надёжным") {
+        dynamicTest("measured(1e-13, 1e-13) — граница включена: |value| >= threshold считается надёжным") {
             assertIs<Measured.Reliable>(measured(1e-13, 1e-13))
             assertIs<Measured.AtNoiseLevel>(measured(Math.nextDown(1e-13), 1e-13))
         },

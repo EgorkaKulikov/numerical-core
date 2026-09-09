@@ -39,7 +39,7 @@ class GoldenGenerate {
         )
 
     private fun meta(): Map<String, Any?> = linkedMapOf(
-        "version" to "0.1.0",
+        "version" to (System.getProperty("golden.version") ?: "unknown"),
         "backend" to Backends.default().name,
         "date" to Instant.now().toString(),
     )

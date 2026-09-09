@@ -81,6 +81,7 @@ tasks.register<Test>("regenerateGolden") {
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform { includeTags("golden-generate") }
     systemProperty("golden.dir", layout.projectDirectory.dir("src/test/resources/golden").asFile.absolutePath)
+    systemProperty("golden.version", project.version.toString())
     systemProperty("numerics.backend", numericsBackend)
     outputs.upToDateWhen { false }
 }
@@ -93,7 +94,7 @@ kover {
             disabledForTestTasks.add("regenerateGolden")
         }
         sources {
-            // Бенчмарки — не библиотечный код, в покрытии не участвуют.
+            // Измерения производительности — не библиотечный код, в покрытии не участвуют.
             excludedSourceSets.add("benchmark")
         }
     }
@@ -184,13 +185,13 @@ publishing {
     }
 }
 
-// Микробенчмарк публичного API (не входит в артефакт и в test).
+// Измерения производительности публичного API (не входят в артефакт и в test).
 val benchmark: SourceSet by sourceSets.creating {
     compileClasspath += sourceSets["main"].output + configurations["runtimeClasspath"]
     runtimeClasspath += output + compileClasspath
 }
 tasks.register<JavaExec>("benchmark") {
-    description = "Микробенчмарк публичного API; размеры матриц — через -Pbench.args=\"256 1024\""
+    description = "Измерения производительности публичного API; размеры матриц — через -Pbench.args=\"256 1024\""
     group = "verification"
     classpath = benchmark.runtimeClasspath
     mainClass.set("numerics.bench.BenchKt")

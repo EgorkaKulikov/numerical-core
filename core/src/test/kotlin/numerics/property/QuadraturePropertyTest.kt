@@ -76,7 +76,7 @@ class QuadraturePropertyTest {
         for (k in 0 until bp.size - 1) Assume.that(bp[k] < bp[k + 1])
         val got = GaussLegendre(8).integrate(bp, ::exp)
         val exact = exp(bp.last()) - exp(bp.first())
-        // Оценка погрешности 8-точечной формулы Гаусса на ОДНОМ отрезке длины L для exp:
+        // Оценка погрешности 8-точечной формулы Гаусса на одном отрезке длины L для exp:
         // L^17·(8!)^4/(17·(16!)^3)·e^b ≈ 6e-9 при L = 6, b = 3 — то есть 1e-12 относительно
         // достижимо только на коротких отрезках; порог 1e-9 покрывает весь диапазон генератора.
         assertTrue(abs(got - exact) <= 1e-9 * abs(exact)) { "$got vs $exact" }

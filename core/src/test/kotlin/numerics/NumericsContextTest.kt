@@ -25,7 +25,7 @@ class NumericsContextTest {
         )
     }
 
-    /** Равенство контекстов — ПО ЗНАЧЕНИЮ: два одинаково настроенных контекста совместимы. */
+    /** Равенство контекстов — по значению: два одинаково настроенных контекста совместимы. */
     @Test
     fun contextEqualityIsByValue() {
         assertEquals(NumericsContext(backend = Backends.java()), NumericsContext(backend = Backends.java()))

@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
 
 /**
- * Контракт [DenseMatrix] и согласие перегрузок фасада на [DenseMatrix] с перегрузками
+ * Контракт [DenseMatrix] и согласие перегрузок единой точки входа на [DenseMatrix] с перегрузками
  * над [Array]<[DoubleArray]>: адаптеры обязаны давать побитово тот же результат.
  */
 @Tag("fast")
@@ -172,7 +172,7 @@ class DenseMatrixTest {
         assertEquals(9.0, arr[4])
     }
 
-    // --- согласие с фасадом --------------------------------------------------
+    // --- согласие с единой точкой входа --------------------------------------------------
 
     private val sizes = listOf(1, 2, 3, 5, 8, 16)
 

@@ -9,7 +9,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.Random
 
-// Бенчмарк основных операций на DenseMatrix. Входы — те же генераторы, что и в golden-эталонах
+// Измерения производительности основных операций на DenseMatrix. Входы — те же генераторы, что и в golden-эталонах
 // (java.util.Random(1000 + n) для матрицы, Random(2000 + n) для вектора); матрица строго
 // диагонально доминирующая. Преобразование в DenseMatrix выполняется один раз вне измеряемого блока.
 
@@ -58,7 +58,7 @@ private fun median(warm: Int, reps: Int, block: () -> Any?): Double {
 private fun fmt(ms: Double?): String =
     if (ms == null) "—" else String.format(Locale.ROOT, "%.2f", ms)
 
-/** Точка входа микробенчмарка; аргументы — размеры матриц, по умолчанию 256 и 1024. */
+/** Точка входа измерений производительности; аргументы — размеры матриц, по умолчанию 256 и 1024. */
 public fun main(args: Array<String>) {
     val sizes = (if (args.isEmpty()) listOf("256", "1024") else args.toList()).map { it.trim().toInt() }
     println("backend: ${Backends.default().name}")
