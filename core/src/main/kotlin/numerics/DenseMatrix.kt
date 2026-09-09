@@ -71,9 +71,11 @@ public class DenseMatrix private constructor(
     public fun toRows(): Array<DoubleArray> = Array(rows) { i -> DoubleArray(cols) { j -> data[i + j * rows] } }
 
     /** Матрицы равны, если совпадают размеры и все элементы (сравнение через [DoubleArray.contentEquals]). */
+    /** Матрицы равны, если совпадают размеры и все элементы (побитово, как [DoubleArray.contentEquals]). */
     override fun equals(other: Any?): Boolean =
         other is DenseMatrix && rows == other.rows && cols == other.cols && data.contentEquals(other.data)
 
+    /** Хеш-код, согласованный с [equals]: по размерам и содержимому. */
     /** Хеш-код, согласованный с [equals]: по размерам и содержимому. */
     override fun hashCode(): Int = 31 * (31 * rows + cols) + data.contentHashCode()
 
@@ -95,6 +97,7 @@ public class DenseMatrix private constructor(
     }
 
     /** Фабрики создания матриц. */
+    /** Фабрики матриц: нулевая, единичная, диагональная, из строк, из столбцового массива, по функции. */
     public companion object {
         private const val PREVIEW = 6
 

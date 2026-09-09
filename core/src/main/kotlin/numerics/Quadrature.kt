@@ -65,6 +65,7 @@ public class GaussLegendre(public val nodesPerSub: Int = 8) {
     public fun refNodesWeights(): Pair<DoubleArray, DoubleArray> = refNodes.copyOf() to refWeights.copyOf()
 
     /** Вычисление эталонных узлов и весов Гаусса–Лежандра. */
+    /** Вычисление эталонных узлов и весов Гаусса–Лежандра. */
     public companion object {
         /**
          * Узлы и веса Гаусса–Лежандра на `[-1, 1]` для `m` точек: метод Ньютона по нулям

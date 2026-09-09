@@ -199,7 +199,7 @@ public object Conditioning {
      * Оценка `cond∞(A) = ‖A‖∞ · ‖A⁻¹‖∞` через явное обращение, вместе с невязкой обращения.
      *
      * На вырожденной матрице исключение не бросается: возвращается бесконечная оценка
-     * с бесконечной невязкой, и [ConditionEstimate.isReliable] ложно.
+     * с бесконечной невязкой, и [ConditionEstimate.isReliable] равно `false`.
      *
      * @param tolerance порог достоверности по невязке обращения; строго положителен.
      * @throws IllegalArgumentException если матрица пуста, не квадратна или `tolerance <= 0`.
