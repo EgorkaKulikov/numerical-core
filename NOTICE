@@ -1,0 +1,6 @@
+numerical-core
+Copyright 2026 Egor Kulikov
+
+Программа распространяется по лицензии Apache License 2.0 (см. LICENSE).
+Использует dev.ludovic.netlib (MIT License) для доступа к BLAS/LAPACK.
+Модуль numerical-core-openblas использует OpenBLAS (BSD 3-Clause) в сборке JavaCPP Presets (Apache License 2.0).

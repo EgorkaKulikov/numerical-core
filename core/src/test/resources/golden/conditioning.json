@@ -1,0 +1,64 @@
+{
+  "generatedWith": {
+    "version": "0.1.0",
+    "backend": "multik-cpu (OpenBLAS)",
+    "date": "2026-09-08T20:42:30.945026Z"
+  },
+  "cases": {
+    "dd-1": {
+      "condInf": "3ff0000000000000",
+      "inversionResidual": "0000000000000000",
+      "isReliable": true
+    },
+    "dd-2": {
+      "condInf": "3ffc5fe2c76f463d",
+      "inversionResidual": "3c61b1a05e2804d0",
+      "isReliable": true
+    },
+    "dd-3": {
+      "condInf": "4003fb487177d114",
+      "inversionResidual": "3ca022aa3d25a05b",
+      "isReliable": true
+    },
+    "dd-5": {
+      "condInf": "400649f9b9166943",
+      "inversionResidual": "3cb290590b453d56",
+      "isReliable": true
+    },
+    "dd-8": {
+      "condInf": "40050b7c4342ca3c",
+      "inversionResidual": "3cb93815df328b0b",
+      "isReliable": true
+    },
+    "dd-16": {
+      "condInf": "40054d9586cb9a6e",
+      "inversionResidual": "3ccc8030d22736fc",
+      "isReliable": true
+    },
+    "dd-32": {
+      "condInf": "40049e9c5230cd73",
+      "inversionResidual": "3cd66cc979463c80",
+      "isReliable": true
+    },
+    "hilbert-2": {
+      "condInf": "403b000000000003",
+      "inversionResidual": "3c85555555555550",
+      "isReliable": true
+    },
+    "hilbert-3": {
+      "condInf": "4087600000000019",
+      "inversionResidual": "3cf64cccccccccc1",
+      "isReliable": true
+    },
+    "hilbert-5": {
+      "condInf": "412ccc4ffffff216",
+      "inversionResidual": "3d95954ffffffcac",
+      "isReliable": true
+    },
+    "hilbert-8": {
+      "condInf": "421f8be71ba4c7b8",
+      "inversionResidual": "3e89402812a5c0ee",
+      "isReliable": false
+    }
+  }
+}

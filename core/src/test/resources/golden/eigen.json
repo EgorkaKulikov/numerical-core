@@ -1,0 +1,25 @@
+{
+  "generatedWith": {
+    "version": "0.1.0",
+    "backend": "multik-cpu (OpenBLAS)",
+    "date": "2026-09-08T20:42:31.032471Z"
+  },
+  "symmetricEigenvalues": {
+    "sym-1": ["3fdae4677082a4b8"],
+    "sym-2": ["bfab9f36cccde756", "3fdb28dca81f4a6c"],
+    "sym-3": ["bfed1f16c02c7a10", "bfd38f3457ecc933", "3ff0c779b247ba6a"],
+    "sym-5": ["bff6fcc85a2f8162", "bfe99cd807009576", "bfd4acae9e069d2a", "3fcfd504737a7465", "40014a0b38255dba"],
+    "sym-8": ["c00076bb31b1862a", "bff373de7a7938a9", "bfdf39753fc50bf9", "bfd669a5339052ce", "3fb5c268f68d3e7c", "3fe16d1128bd7aed", "3ff132a365c2bea5", "3ffa0b1be290231b"],
+    "sym-16": ["c0066c5e352d99aa", "c000c2025fafa2a2", "bffd6cadedb1c6f8", "bffc256b772bc42e", "bff3b7561c7a81e0", "bff23cb67ad72554", "bfe52f6246d1e3ed", "3fb2655873880675", "3fda8da42d273bf8", "3fdc4c684a18fbda", "3feef3eaccb6bfd0", "3ff40591f488eaa1", "3ff8651412ae053a", "3ffbd01ec99bc4f9", "4001eb5c6ced9fdd", "4007780754f7f338"],
+    "sym-32": ["c011ad7b774cdf96", "c0101f97bd180d5b", "c00d54e7158ab5d2", "c00c257e4cc57c8d", "c007a94072c53e82", "c00560dd4910727b", "c003c09904f822e6", "c002bce47c7f7ec7", "bffc09b2035ef72e", "bff70bf966a962b5", "bff49b80d50c5e2b", "bff1502c3f66b0d5", "bfebd308a8114078", "bfe6c1cb20b6c308", "bfd71fa8867c9286", "3f9bf7738b882d99", "3fcf65c1756e5137", "3fd5927aeaaf3a80", "3fe22a625d2acccf", "3fe7856dafa86f60", "3feacd90e0a6c7bb", "3ff68d7b9e98d69d", "3ffa83a23e8f4bfc", "3fffd841bf5dc2f6", "400118fc559e9362", "40025bc6d335385e", "40040bdc74943582", "4006ba1f04a7e828", "4008cf6a7b07b62d", "400acfe03b7e95a3", "400d12407bc25a00", "4011143d1a2d2eae"]
+  },
+  "conditionSymmetric": {
+    "spd-1": "3ff0000000000000",
+    "spd-2": "3ff44ecb8ff146c1",
+    "spd-3": "3ff87cd1a3059c47",
+    "spd-5": "400035d19c2e57a4",
+    "spd-8": "3ffddb6c74cb8470",
+    "spd-16": "400181fe5e529d9d",
+    "spd-32": "40012c73839223bc"
+  }
+}
