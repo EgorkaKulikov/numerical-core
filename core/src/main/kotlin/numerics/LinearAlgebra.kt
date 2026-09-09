@@ -377,36 +377,29 @@ public object LinearAlgebra {
     // --- Перегрузки с NumericsContext: реализация линейной алгебры из контекста ---
 
     /** То же, что [matVec], с реализацией линейной алгебры из [context]. */
-    /** То же, что [matVec], с реализацией линейной алгебры из [context]. */
     public fun matVec(a: DenseMatrix, x: DoubleArray, context: NumericsContext): DoubleArray =
         matVec(a, x, context.backend)
 
-    /** То же, что [matTransVec], с реализацией линейной алгебры из [context]. */
     /** То же, что [matTransVec], с реализацией линейной алгебры из [context]. */
     public fun matTransVec(a: DenseMatrix, y: DoubleArray, context: NumericsContext): DoubleArray =
         matTransVec(a, y, context.backend)
 
     /** То же, что [matMat], с реализацией линейной алгебры из [context]. */
-    /** То же, что [matMat], с реализацией линейной алгебры из [context]. */
     public fun matMat(a: DenseMatrix, b: DenseMatrix, context: NumericsContext): DenseMatrix =
         matMat(a, b, context.backend)
 
-    /** То же, что [atWa], с реализацией линейной алгебры из [context]. */
     /** То же, что [atWa], с реализацией линейной алгебры из [context]. */
     public fun atWa(a: DenseMatrix, w: DoubleArray, context: NumericsContext): DenseMatrix =
         atWa(a, w, context.backend)
 
     /** То же, что [addScaled], с реализацией линейной алгебры из [context]. */
-    /** То же, что [addScaled], с реализацией линейной алгебры из [context]. */
     public fun addScaled(a: DenseMatrix, b: DenseMatrix, s: Double, context: NumericsContext): DenseMatrix =
         addScaled(a, b, s, context.backend)
 
     /** То же, что [solve], с реализацией линейной алгебры из [context]. */
-    /** То же, что [solve], с реализацией линейной алгебры из [context]. */
     public fun solve(a: DenseMatrix, b: DoubleArray, context: NumericsContext): DoubleArray =
         solve(a, b, context.backend)
 
-    /** То же, что [solveDiagnosed], с реализацией линейной алгебры из [context]. */
     /** То же, что [solveDiagnosed], с реализацией линейной алгебры из [context]. */
     public fun solveDiagnosed(
         a: DenseMatrix,
@@ -416,7 +409,6 @@ public object LinearAlgebra {
         tolerance: Double = Conditioning.INVERSION_RESIDUAL_TOLERANCE,
     ): DiagnosedSolution = solveDiagnosed(a, b, context.backend, source, tolerance)
 
-    /** То же, что [cholesky], с реализацией линейной алгебры из [context]. */
     /** То же, что [cholesky], с реализацией линейной алгебры из [context]. */
     public fun cholesky(a: DenseMatrix, context: NumericsContext): DenseMatrix? =
         cholesky(a, context.backend)
