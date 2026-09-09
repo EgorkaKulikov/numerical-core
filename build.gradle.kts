@@ -1,3 +1,5 @@
+import kotlinx.kover.gradle.plugin.dsl.CoverageUnit
+
 plugins {
     kotlin("jvm") version "2.0.0"
     `java-library`
@@ -94,7 +96,36 @@ kover {
             disabledForTestTasks.add("fastTest")
             disabledForTestTasks.add("regenerateGolden")
         }
+        sources {
+            // Бенчмарки — не библиотечный код, в покрытии не участвуют.
+            excludedSourceSets.add("benchmark")
+        }
     }
+    reports {
+        filters {
+            excludes {
+                packages("numerics.bench")
+            }
+        }
+        // Планка покрытия: проверяется задачей `koverVerify`, входящей в `check`.
+        // Замер на этапе 4 (обе реализации доступны): строки 91.9 %, ветви 85.6 %;
+        // порог — фактическое значение минус 2 %, чтобы не флапать на разных машинах.
+        verify {
+            rule("Покрытие строк") {
+                minBound(89)
+            }
+            rule("Покрытие ветвей") {
+                bound {
+                    minValue = 83
+                    coverageUnits = CoverageUnit.BRANCH
+                }
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn("koverVerify")
 }
 
 // --- Публикация ---------------------------------------------------------------

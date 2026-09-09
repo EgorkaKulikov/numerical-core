@@ -4,7 +4,9 @@ import numerics.DenseMatrix
 import numerics.LinearAlgebra
 import numerics.NumericsContext
 import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.TestFactory
 import kotlin.math.abs
 import kotlin.random.Random
 import kotlin.test.Test
@@ -82,12 +84,12 @@ class BackendSpiTest {
         assertTrue(ex.message!!.contains("native, java, auto"), ex.message)
     }
 
-    @Test
-    fun nativeAndJavaAgreeOnRandomSystems() {
-        assumeTrue(Backends.isNativeAvailable())
-        val nat = Backends.native()
-        val jav = Backends.java()
-        for (n in intArrayOf(3, 8, 20, 50)) {
+    @TestFactory
+    fun nativeAndJavaAgreeOnRandomSystems(): List<DynamicTest> = listOf(3, 8, 20, 50).map { n ->
+        DynamicTest.dynamicTest("n=$n") {
+            assumeTrue(Backends.isNativeAvailable())
+            val nat = Backends.native()
+            val jav = Backends.java()
             val rnd = Random(7000 + n)
             val a = diagDominant(rnd, n)
             val b = rand(rnd, n, 2)
@@ -110,22 +112,22 @@ class BackendSpiTest {
         }
     }
 
-    @Test
-    fun facadeUsesExplicitlyPassedBackend() {
-        val a = arrayOf(doubleArrayOf(2.0, 0.0), doubleArrayOf(0.0, 4.0))
-        val expected = doubleArrayOf(1.0, 2.0)
-        for (backend in Backends.available()) {
+    @TestFactory
+    fun facadeUsesExplicitlyPassedBackend(): List<DynamicTest> = Backends.available().map { backend ->
+        DynamicTest.dynamicTest(backend.name) {
+            val a = arrayOf(doubleArrayOf(2.0, 0.0), doubleArrayOf(0.0, 4.0))
+            val expected = doubleArrayOf(1.0, 2.0)
             assertClose(expected, LinearAlgebra.solve(a, doubleArrayOf(2.0, 8.0), backend), backend.name)
             assertClose(expected, LinearAlgebra.matVec(LinearAlgebra.identity(2), expected, backend), backend.name)
+            assertTrue(NumericsContext.default().parallel)
         }
-        assertTrue(NumericsContext.default().parallel)
     }
 
-    @Test
-    fun singularSystemThrowsOnAllBackends() {
-        val a = DenseMatrix.fromRows(arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(2.0, 4.0)))
-        val b = DenseMatrix.fromColumnMajor(2, 1, doubleArrayOf(1.0, 2.0))
-        for (backend in Backends.available()) {
+    @TestFactory
+    fun singularSystemThrowsOnAllBackends(): List<DynamicTest> = Backends.available().map { backend ->
+        DynamicTest.dynamicTest(backend.name) {
+            val a = DenseMatrix.fromRows(arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(2.0, 4.0)))
+            val b = DenseMatrix.fromColumnMajor(2, 1, doubleArrayOf(1.0, 2.0))
             assertFailsWith<IllegalStateException>(backend.name) { backend.solve(a, b) }
             assertTrue(backend.luFactor(a).isSingular, backend.name)
             assertEquals(null, backend.inverse(a), backend.name)

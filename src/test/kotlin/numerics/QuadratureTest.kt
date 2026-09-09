@@ -1,6 +1,8 @@
 package numerics
 
+import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.TestFactory
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.test.Test
@@ -38,8 +40,8 @@ class QuadratureTest {
      * which is only possible if Newton converged to the TRUE nodes. If the loop had
      * exited early/incorrectly the nodes would drift and this integral would be wrong.
      */
-    @Test fun newtonNodesExactUpToDegree2mMinus1() {
-        for (m in 2..12) {
+    @TestFactory fun newtonNodesExactUpToDegree2mMinus1(): List<DynamicTest> = (2..12).map { m ->
+        DynamicTest.dynamicTest("m=$m") {
             val q = GaussLegendre(m)
             val deg = 2 * m - 1
             val expected = 1.0 / (deg + 1) // ∫_0^1 t^deg dt

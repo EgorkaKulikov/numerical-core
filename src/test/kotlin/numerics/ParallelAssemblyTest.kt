@@ -1,9 +1,10 @@
 package numerics
 
+import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.TestFactory
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
@@ -30,6 +31,10 @@ class ParallelAssemblyTest {
     private fun sequential(rows: Int, cols: Int): Array<DoubleArray> =
         Array(rows) { i -> DoubleArray(cols) { j -> cell(i, j, cols) } }
 
+    /** Один DynamicTest на форму матрицы. */
+    private fun perSize(body: (rows: Int, cols: Int) -> Unit): List<DynamicTest> =
+        sizes.map { sz -> DynamicTest.dynamicTest("${sz[0]}×${sz[1]}") { body(sz[0], sz[1]) } }
+
     private fun assertEq(expected: Array<DoubleArray>, actual: Array<DoubleArray>) {
         assertEquals(expected.size, actual.size)
         for (i in expected.indices) {
@@ -41,27 +46,21 @@ class ParallelAssemblyTest {
     }
 
     /** assembleMatrix равен последовательному заполнению на всех размерах. */
-    @Test
-    fun assembleMatrixEqualsSequential() {
-        for (sz in sizes) {
-            val (rows, cols) = sz[0] to sz[1]
-            val expected = sequential(rows, cols)
-            val actual = ParallelAssembly.assembleMatrix(rows, cols) { i, j -> cell(i, j, cols) }
-            assertEq(expected, actual)
-        }
+    @TestFactory
+    fun assembleMatrixEqualsSequential(): List<DynamicTest> = perSize { rows, cols ->
+        val expected = sequential(rows, cols)
+        val actual = ParallelAssembly.assembleMatrix(rows, cols) { i, j -> cell(i, j, cols) }
+        assertEq(expected, actual)
     }
 
     /** assembleRows равен последовательному заполнению на всех размерах. */
-    @Test
-    fun assembleRowsEqualsSequential() {
-        for (sz in sizes) {
-            val (rows, cols) = sz[0] to sz[1]
-            val expected = sequential(rows, cols)
-            val actual = ParallelAssembly.assembleRows(rows, cols) { i ->
-                DoubleArray(cols) { j -> cell(i, j, cols) }
-            }
-            assertEq(expected, actual)
+    @TestFactory
+    fun assembleRowsEqualsSequential(): List<DynamicTest> = perSize { rows, cols ->
+        val expected = sequential(rows, cols)
+        val actual = ParallelAssembly.assembleRows(rows, cols) { i ->
+            DoubleArray(cols) { j -> cell(i, j, cols) }
         }
+        assertEq(expected, actual)
     }
 
     /**
@@ -69,9 +68,9 @@ class ParallelAssemblyTest {
      * «матрица», и ошибка всплыла бы позже в линейной алгебре. Проверяем ОБА режима:
      * в параллельном IntStream прокидывает исключение задачи вызывающему потоку как есть.
      */
-    @Test
-    fun assembleRowsRejectsRaggedRow() {
-        for (parallel in listOf(false, true)) {
+    @TestFactory
+    fun assembleRowsRejectsRaggedRow(): List<DynamicTest> = listOf(false, true).map { parallel ->
+        DynamicTest.dynamicTest("parallel=$parallel") {
             val e = assertFailsWith<IllegalArgumentException>("parallel=$parallel") {
                 // строка 3 на один элемент короче обявленного cols
                 ParallelAssembly.assembleRows(8, 5, parallel) { i ->

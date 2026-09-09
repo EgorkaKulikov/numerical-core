@@ -2,7 +2,9 @@ package numerics
 
 import numerics.backend.Backends
 import numerics.backend.LinAlgBackend
+import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.TestFactory
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,6 +23,12 @@ class LinearAlgebraVsReferenceTest {
     private val tol = 1e-8
     private val sizes = intArrayOf(3, 8, 20)
     private val backends: List<LinAlgBackend> = Backends.available()
+
+    /** Один DynamicTest на пару (реализация, размер): падение одного случая не скрывает остальные. */
+    private fun perBackendAndSize(name: String, body: (LinAlgBackend, Int) -> Unit): List<DynamicTest> =
+        backends.flatMap { backend ->
+            sizes.map { n -> DynamicTest.dynamicTest("$name [${backend.name}, n=$n]") { body(backend, n) } }
+        }
 
     private fun randMatrix(rnd: Random, rows: Int, cols: Int): Array<DoubleArray> =
         Array(rows) { DoubleArray(cols) { rnd.nextDouble(-1.0, 1.0) } }
@@ -63,70 +71,58 @@ class LinearAlgebraVsReferenceTest {
     }
 
     /** matVec бэкенда совпадает с эталоном на размерах 3, 8, 20. */
-    @Test
-    fun matVecMatchesReference() {
-        for (backend in backends) for (n in sizes) {
-            val rnd = Random(1000 + n)
-            val a = randMatrix(rnd, n, n)
-            val x = randVector(rnd, n)
-            assertVecEq(ReferenceOracle.matVec(a, x), LinearAlgebra.matVec(a, x, backend))
-        }
+    @TestFactory
+    fun matVecMatchesReference() = perBackendAndSize("matVecMatchesReference") { backend, n ->
+        val rnd = Random(1000 + n)
+        val a = randMatrix(rnd, n, n)
+        val x = randVector(rnd, n)
+        assertVecEq(ReferenceOracle.matVec(a, x), LinearAlgebra.matVec(a, x, backend))
     }
 
     /** matTransVec бэкенда совпадает с эталоном (прямоугольные матрицы). */
-    @Test
-    fun matTransVecMatchesReference() {
-        for (backend in backends) for (n in sizes) {
-            val rnd = Random(2000 + n)
-            val a = randMatrix(rnd, n, n + 2)
-            val y = randVector(rnd, n)
-            assertVecEq(ReferenceOracle.matTransVec(a, y), LinearAlgebra.matTransVec(a, y, backend))
-        }
+    @TestFactory
+    fun matTransVecMatchesReference() = perBackendAndSize("matTransVecMatchesReference") { backend, n ->
+        val rnd = Random(2000 + n)
+        val a = randMatrix(rnd, n, n + 2)
+        val y = randVector(rnd, n)
+        assertVecEq(ReferenceOracle.matTransVec(a, y), LinearAlgebra.matTransVec(a, y, backend))
     }
 
     /** matMat бэкенда совпадает с эталоном на прямоугольных множителях. */
-    @Test
-    fun matMatMatchesReference() {
-        for (backend in backends) for (n in sizes) {
-            val rnd = Random(3000 + n)
-            val a = randMatrix(rnd, n, n + 1)
-            val b = randMatrix(rnd, n + 1, n + 3)
-            assertMatEq(ReferenceOracle.matMat(a, b), LinearAlgebra.matMat(a, b, backend))
-        }
+    @TestFactory
+    fun matMatMatchesReference() = perBackendAndSize("matMatMatchesReference") { backend, n ->
+        val rnd = Random(3000 + n)
+        val a = randMatrix(rnd, n, n + 1)
+        val b = randMatrix(rnd, n + 1, n + 3)
+        assertMatEq(ReferenceOracle.matMat(a, b), LinearAlgebra.matMat(a, b, backend))
     }
 
     /** atWa (A^T diag(w) A) бэкенда совпадает с эталоном. */
-    @Test
-    fun atWaMatchesReference() {
-        for (backend in backends) for (n in sizes) {
-            val rnd = Random(4000 + n)
-            val a = randMatrix(rnd, n + 2, n)
-            val w = randVector(rnd, n + 2)
-            assertMatEq(ReferenceOracle.atWa(a, w), LinearAlgebra.atWa(a, w, backend))
-        }
+    @TestFactory
+    fun atWaMatchesReference() = perBackendAndSize("atWaMatchesReference") { backend, n ->
+        val rnd = Random(4000 + n)
+        val a = randMatrix(rnd, n + 2, n)
+        val w = randVector(rnd, n + 2)
+        assertMatEq(ReferenceOracle.atWa(a, w), LinearAlgebra.atWa(a, w, backend))
     }
 
     /** addScaled (A + s*B) бэкенда совпадает с эталоном. */
-    @Test
-    fun addScaledMatchesReference() {
-        for (backend in backends) for (n in sizes) {
-            val rnd = Random(5000 + n)
-            val a = randMatrix(rnd, n, n)
-            val b = randMatrix(rnd, n, n)
-            val s = rnd.nextDouble(-2.0, 2.0)
-            assertMatEq(ReferenceOracle.addScaled(a, b, s), LinearAlgebra.addScaled(a, b, s, backend))
-        }
+    @TestFactory
+    fun addScaledMatchesReference() = perBackendAndSize("addScaledMatchesReference") { backend, n ->
+        val rnd = Random(5000 + n)
+        val a = randMatrix(rnd, n, n)
+        val b = randMatrix(rnd, n, n)
+        val s = rnd.nextDouble(-2.0, 2.0)
+        assertMatEq(ReferenceOracle.addScaled(a, b, s), LinearAlgebra.addScaled(a, b, s, backend))
     }
 
     /** solve бэкенда совпадает с эталоном на хорошо обусловленных СЛАУ. */
-    @Test
-    fun solveMatchesReference() {
-        for (backend in backends) for (n in sizes) {
-            val rnd = Random(6000 + n)
-            val a = diagDominant(rnd, n)
-            val b = randVector(rnd, n)
-            assertVecEq(ReferenceOracle.solve(a, b), LinearAlgebra.solve(a, b, backend))
-        }
+    @TestFactory
+    fun solveMatchesReference() = perBackendAndSize("solveMatchesReference") { backend, n ->
+        val rnd = Random(6000 + n)
+        val a = diagDominant(rnd, n)
+        val b = randVector(rnd, n)
+        assertVecEq(ReferenceOracle.solve(a, b), LinearAlgebra.solve(a, b, backend))
     }
 
     /**
@@ -142,19 +138,23 @@ class LinearAlgebraVsReferenceTest {
      * от бэкендов одинаковой реакции на них было бы неверно (см. KDoc
      * [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE]).
      */
-    @Test
-    fun bothBackendsRejectSingularSystemsAtAnyScale() {
+    @TestFactory
+    fun bothBackendsRejectSingularSystemsAtAnyScale(): List<DynamicTest> {
+        val cases = mutableListOf<DynamicTest>()
         // (а) Ранг 1 в разных масштабах — масштабно-инвариантность семантики.
         for (scale in doubleArrayOf(1e-8, 1.0, 1e8)) {
-            val a = arrayOf(
-                doubleArrayOf(1.0 * scale, 2.0 * scale),
-                doubleArrayOf(2.0 * scale, 4.0 * scale),
-            )
-            val b = doubleArrayOf(1.0 * scale, 3.0 * scale)
-            assertFailsWith<IllegalStateException>("scale=$scale, бэкенд ${Backends.default().name}") {
-                LinearAlgebra.solve(a, b)
+            cases += DynamicTest.dynamicTest("ранг 1, scale=$scale") {
+                val a = arrayOf(
+                    doubleArrayOf(1.0 * scale, 2.0 * scale),
+                    doubleArrayOf(2.0 * scale, 4.0 * scale),
+                )
+                val b = doubleArrayOf(1.0 * scale, 3.0 * scale)
+                assertFailsWith<IllegalStateException>("scale=$scale, бэкенд ${Backends.default().name}") {
+                    LinearAlgebra.solve(a, b)
+                }
             }
         }
+        cases += DynamicTest.dynamicTest("вырождение поворотом и ранг 2 в размере 3") {
         // (б) Вырождение поворотом: diag(1, 0) в базисе, повёрнутом на 45 градусов —
         // ни один элемент матрицы не мал, а сама она вырождена.
         val rotated = arrayOf(doubleArrayOf(0.5, 0.5), doubleArrayOf(0.5, 0.5))
@@ -172,6 +172,8 @@ class LinearAlgebraVsReferenceTest {
         assertFailsWith<IllegalStateException>("бэкенд ${Backends.default().name}") {
             LinearAlgebra.solve(rank2, doubleArrayOf(1.0, 3.0, 1.0))
         }
+        }
+        return cases
     }
 
     /**
