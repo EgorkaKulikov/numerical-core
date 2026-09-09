@@ -10,7 +10,7 @@ package numerics
  * погрешностей не конечна или не положительна: при `E = 0` или `E = ∞` отношение даёт 0 или
  * бесконечность, и порядок не определён на машинной точности.
  */
-fun orders(errs: List<Double>): List<Double> =
+public fun orders(errs: List<Double>): List<Double> =
     errs.indices.map { i ->
         when {
             i + 1 >= errs.size -> Double.NaN
@@ -25,7 +25,7 @@ fun orders(errs: List<Double>): List<Double> =
  *
  * @throws IllegalArgumentException если шаг `h` не положителен
  */
-fun constCh(eh: Double, h: Double, p: Double): Double {
+public fun constCh(eh: Double, h: Double, p: Double): Double {
     require(h > 0) { "шаг сетки должен быть положительным, получено $h" }
     return eh / Math.pow(h, p)
 }

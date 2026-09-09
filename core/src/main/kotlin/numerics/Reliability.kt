@@ -11,7 +11,7 @@ import kotlin.math.abs
  * ([orderOrNull], [reliableOrders]) по конструкции не вычисляются, если хотя бы один
  * аргумент лежит на уровне шума.
  */
-const val MACHINE_NOISE_THRESHOLD: Double = 1e-13
+public const val MACHINE_NOISE_THRESHOLD: Double = 1e-13
 
 /**
  * Величина вместе с суждением о её достоверности.
@@ -21,15 +21,18 @@ const val MACHINE_NOISE_THRESHOLD: Double = 1e-13
  * с образцом, поэтому недостоверное значение нельзя использовать по
  * невнимательности.
  */
-sealed interface Measured {
+public sealed interface Measured {
     /** Само численное значение — доступно всегда, в том числе для печати с пометкой. */
-    val value: Double
+    public val value: Double
 
     /** Величина превышает порог достоверности и может участвовать в вычислениях. */
-    data class Reliable(override val value: Double) : Measured
+    public data class Reliable(override val value: Double) : Measured
 
-    /** Величина не превышает порог [threshold] (или не является конечной) — это шум. */
-    data class AtNoiseLevel(override val value: Double, val threshold: Double) : Measured
+    /**
+     * Величина не превышает порог [threshold] (или не является конечной) — это шум.
+     * @property threshold порог достоверности, с которым сравнивалась величина.
+     */
+    public data class AtNoiseLevel(override val value: Double, val threshold: Double) : Measured
 }
 
 /**
@@ -41,7 +44,7 @@ sealed interface Measured {
  * @throws IllegalArgumentException если `threshold <= 0` — нулевой порог означал
  *   бы отсутствие проверки, то есть ровно ту ошибку, которую тип предотвращает.
  */
-fun measured(value: Double, threshold: Double = MACHINE_NOISE_THRESHOLD): Measured {
+public fun measured(value: Double, threshold: Double = MACHINE_NOISE_THRESHOLD): Measured {
     require(threshold > 0.0) { "measured: требуется threshold > 0, получено $threshold" }
     return if (value.isFinite() && abs(value) >= threshold) {
         Measured.Reliable(value)
@@ -56,7 +59,7 @@ fun measured(value: Double, threshold: Double = MACHINE_NOISE_THRESHOLD): Measur
  * `null` здесь — не «не удалось посчитать», а «величина не определена»:
  * отношение чисел на уровне шума округления не несёт информации о методе.
  */
-fun ratio(numerator: Measured, denominator: Measured): Double? =
+public fun ratio(numerator: Measured, denominator: Measured): Double? =
     if (numerator is Measured.Reliable && denominator is Measured.Reliable) {
         numerator.value / denominator.value
     } else {
@@ -70,7 +73,7 @@ fun ratio(numerator: Measured, denominator: Measured): Double? =
  * `null` возвращается, если хотя бы одна погрешность на уровне шума ([ratio])
  * либо их отношение неположительно (логарифм не определён).
  */
-fun orderOrNull(coarse: Measured, fine: Measured): Double? {
+public fun orderOrNull(coarse: Measured, fine: Measured): Double? {
     val r = ratio(coarse, fine) ?: return null
     return if (r <= 0.0) null else Math.log(r) / Math.log(2.0)
 }
@@ -79,7 +82,7 @@ fun orderOrNull(coarse: Measured, fine: Measured): Double? {
  * Столбец порядков сходимости с применённым порогом достоверности —
  * вариант [orders], который отказывается считать порядок по шуму.
  *
- * СООТНОШЕНИЕ С [orders]. Обе функции дают для последней строки «не определено»
+ * Соотношение с [orders]: обе функции дают для последней строки «не определено»
  * (там просто нет следующей строки). Отличие в том, что [orders] считает
  * порядок по любым положительным величинам, а эта функция — только по
  * величинам не ниже [threshold]; «не определено» здесь кодируется `null`, а не
@@ -87,7 +90,7 @@ fun orderOrNull(coarse: Measured, fine: Measured): Double? {
  * Для печати в одном формате достаточно `reliableOrders(errs).map { it ?: Double.NaN }`,
  * и при всех погрешностях выше порога результат совпадает с `orders(errs)`.
  */
-fun reliableOrders(errs: List<Double>, threshold: Double = MACHINE_NOISE_THRESHOLD): List<Double?> {
+public fun reliableOrders(errs: List<Double>, threshold: Double = MACHINE_NOISE_THRESHOLD): List<Double?> {
     val m = errs.map { measured(it, threshold) }
     return m.indices.map { i -> if (i + 1 < m.size) orderOrNull(m[i], m[i + 1]) else null }
 }
@@ -98,7 +101,7 @@ fun reliableOrders(errs: List<Double>, threshold: Double = MACHINE_NOISE_THRESHO
  *
  * @throws IllegalArgumentException если шаг `h` не положителен
  */
-fun reliableConstCh(eh: Measured, h: Double, p: Double): Double? {
+public fun reliableConstCh(eh: Measured, h: Double, p: Double): Double? {
     require(h > 0) { "шаг сетки должен быть положительным, получено $h" }
     return if (eh is Measured.Reliable) constCh(eh.value, h, p) else null
 }

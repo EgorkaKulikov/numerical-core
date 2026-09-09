@@ -40,10 +40,12 @@ publishing {
                         "используется там, где системной библиотеки нет"
                 )
                 url.set("https://github.com/EgorkaKulikov/numerical-core")
+                inceptionYear.set("2026")
                 licenses {
                     license {
-                        name.set("Apache License 2.0")
+                        name.set("Apache License, Version 2.0")
                         url.set("https://www.apache.org/licenses/LICENSE-2.0")
+                        distribution.set("repo")
                     }
                 }
                 developers {

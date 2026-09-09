@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 /**
  * Тесты порядков сходимости по таблице погрешностей: orders (порядок log2),
- * constCh (константа E_h/h^p). Метрика errorEh проверяется в `minimal-splines`.
+ * constCh (константа E_h/h^p).
  */
 @Tag("fast")
 class ConvergenceRatesTest {

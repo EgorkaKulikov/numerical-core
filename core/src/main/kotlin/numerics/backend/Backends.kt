@@ -24,7 +24,7 @@ import java.util.logging.Logger
  * передаёт её явно параметром [numerics.LinearAlgebra] или полем
  * [numerics.NumericsContext].
  */
-object Backends {
+public object Backends {
 
     private const val PROPERTY = "numerics.backend"
 
@@ -64,26 +64,26 @@ object Backends {
      * @throws IllegalStateException если запрошена недоступная реализация.
      * @throws IllegalArgumentException если значение свойства не из числа допустимых.
      */
-    fun default(): LinAlgBackend = startup.value
+    public fun default(): LinAlgBackend = startup.value
 
     /**
      * Системная BLAS/LAPACK через JNI.
      * @throws IllegalStateException если нативная библиотека не загрузилась.
      */
-    fun native(): LinAlgBackend = nativeInstance.value
+    public fun native(): LinAlgBackend = nativeInstance.value
 
     /** Переносимая реализация на Java; доступна всегда. */
-    fun java(): LinAlgBackend = javaInstance.value
+    public fun java(): LinAlgBackend = javaInstance.value
 
     /** Истина, если системная библиотека загрузилась; результат вычисляется один раз. */
-    fun isNativeAvailable(): Boolean = nativeAvailable.value
+    public fun isNativeAvailable(): Boolean = nativeAvailable.value
 
     /** Реально доступные реализации: системная (если загрузилась) и Java. */
-    fun available(): List<LinAlgBackend> =
+    public fun available(): List<LinAlgBackend> =
         if (isNativeAvailable()) listOf(native(), java()) else listOf(java())
 
     /** Имя реализации по умолчанию и режим, заданный свойством. */
-    fun describe(): String =
+    public fun describe(): String =
         "backend=${default().name}, ${PROPERTY}=${System.getProperty(PROPERTY) ?: "auto"}"
 
     /**

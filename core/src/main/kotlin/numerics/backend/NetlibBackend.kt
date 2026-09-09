@@ -16,7 +16,7 @@ import org.netlib.util.intW
  * и их массивы передаются в ядро напрямую; где LAPACK пишет результат на место входа,
  * предварительно снимается копия — входы никогда не изменяются.
  */
-class NetlibBackend internal constructor(
+public class NetlibBackend internal constructor(
     private val blas: BLAS,
     private val lapack: LAPACK,
 ) : LinAlgBackend {

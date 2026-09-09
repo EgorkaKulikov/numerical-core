@@ -14,9 +14,9 @@ import java.util.Random
 // диагонально доминирующая. Преобразование в DenseMatrix выполняется один раз вне измеряемого блока.
 
 @Volatile
-var sink: Any? = null
+private var sink: Any? = null
 
-fun randomDD(n: Int): Array<DoubleArray> {
+private fun randomDD(n: Int): Array<DoubleArray> {
     val r = Random(1000L + n)
     return Array(n) { i ->
         val row = DoubleArray(n) { r.nextDouble() * 2 - 1 }
@@ -25,12 +25,12 @@ fun randomDD(n: Int): Array<DoubleArray> {
     }
 }
 
-fun randomVec(n: Int): DoubleArray {
+private fun randomVec(n: Int): DoubleArray {
     val r = Random(2000L + n)
     return DoubleArray(n) { r.nextDouble() * 2 - 1 }
 }
 
-fun symmetrize(b: Array<DoubleArray>): Array<DoubleArray> {
+private fun symmetrize(b: Array<DoubleArray>): Array<DoubleArray> {
     val n = b.size
     val s = Array(n) { DoubleArray(n) }
     for (i in 0 until n) {
@@ -43,7 +43,7 @@ fun symmetrize(b: Array<DoubleArray>): Array<DoubleArray> {
     return s
 }
 
-fun median(warm: Int, reps: Int, block: () -> Any?): Double {
+private fun median(warm: Int, reps: Int, block: () -> Any?): Double {
     repeat(warm) { sink = block() }
     val t = DoubleArray(reps)
     for (k in 0 until reps) {
@@ -58,7 +58,8 @@ fun median(warm: Int, reps: Int, block: () -> Any?): Double {
 private fun fmt(ms: Double?): String =
     if (ms == null) "—" else String.format(Locale.ROOT, "%.2f", ms)
 
-fun main(args: Array<String>) {
+/** Точка входа микробенчмарка; аргументы — размеры матриц, по умолчанию 256 и 1024. */
+public fun main(args: Array<String>) {
     val sizes = (if (args.isEmpty()) listOf("256", "1024") else args.toList()).map { it.trim().toInt() }
     println("backend: ${Backends.default().name}")
     println("processors: ${Runtime.getRuntime().availableProcessors()}")

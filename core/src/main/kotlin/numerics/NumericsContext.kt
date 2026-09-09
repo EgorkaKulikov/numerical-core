@@ -15,7 +15,7 @@ import numerics.backend.LinAlgBackend
  * @param parallel разрешена ли параллельная сборка ([ParallelAssembly])
  * @param parallelism число потоков параллельной сборки (не меньше 1)
  */
-data class NumericsContext(
+public data class NumericsContext(
     val backend: LinAlgBackend = Backends.default(),
     val parallel: Boolean = true,
     val parallelism: Int = Runtime.getRuntime().availableProcessors(),
@@ -24,7 +24,8 @@ data class NumericsContext(
         require(parallelism >= 1) { "степень параллелизма должна быть не меньше 1, получено $parallelism" }
     }
 
-    companion object {
+    /** Разделяемый контекст по умолчанию и проверка совместимости контекстов. */
+    public companion object {
         /**
          * Разделяемый экземпляр контекста по умолчанию: один на процесс, а не на каждый вызов
          * с параметром по умолчанию. `lazy`, потому что [Backends.default] может бросить
@@ -34,12 +35,12 @@ data class NumericsContext(
         private val shared: Lazy<NumericsContext> = lazy { NumericsContext() }
 
         /** Контекст по умолчанию: стартовая реализация линейной алгебры, параллельная сборка включена. */
-        fun default(): NumericsContext = shared.value
+        public fun default(): NumericsContext = shared.value
 
         /**
          * Требует, чтобы зависимость использовала тот же контекст, что и владелец. Расхождение
          * контекстов означает, что части одной задачи будут посчитаны разными реализациями
-         * линейной алгебры, что молча сдвигает младшие биты результата.
+         * линейной алгебры, что незаметно сдвигает младшие биты результата.
          *
          * @param owner имя класса-владельца для сообщения об ошибке
          * @param expected контекст владельца
@@ -47,7 +48,7 @@ data class NumericsContext(
          * @param actual контекст зависимости
          * @throws IllegalArgumentException если контексты различаются
          */
-        fun requireSame(
+        public fun requireSame(
             owner: String,
             expected: NumericsContext,
             dependency: String,
@@ -62,5 +63,5 @@ data class NumericsContext(
     }
 
     /** Короткое описание для сообщений об ошибках. */
-    fun describe(): String = "backend=${backend.name}, parallel=$parallel, parallelism=$parallelism"
+    public fun describe(): String = "backend=${backend.name}, parallel=$parallel, parallelism=$parallelism"
 }

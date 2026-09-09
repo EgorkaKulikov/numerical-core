@@ -12,13 +12,13 @@ import java.util.stream.IntStream
  * с [NumericsContext] берут разрешение параллелизма и число потоков из контекста и создают
  * отдельный пул на время сборки.
  */
-object ParallelAssembly {
+public object ParallelAssembly {
 
     /**
      * Матрица `rows × cols` как массив строк: строка `i` целиком вычисляется функцией [rowFn]
      * (длина каждой строки должна равняться `cols`).
      */
-    fun assembleRows(
+    public fun assembleRows(
         rows: Int,
         cols: Int,
         parallel: Boolean = true,
@@ -26,7 +26,7 @@ object ParallelAssembly {
     ): Array<DoubleArray> = assembleRowsImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), rowFn)
 
     /** То же, что [assembleRows], с параметрами параллелизма из [context]. */
-    fun assembleRows(
+    public fun assembleRows(
         rows: Int,
         cols: Int,
         context: NumericsContext,
@@ -34,7 +34,7 @@ object ParallelAssembly {
     ): Array<DoubleArray> = assembleRowsImpl(rows, cols, context.parallel, context.parallelism, rowFn)
 
     /** Матрица `rows × cols` как массив строк: элемент `(i, j)` вычисляется функцией [cellFn]. */
-    fun assembleMatrix(
+    public fun assembleMatrix(
         rows: Int,
         cols: Int,
         parallel: Boolean = true,
@@ -42,7 +42,7 @@ object ParallelAssembly {
     ): Array<DoubleArray> = assembleMatrixImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), cellFn)
 
     /** То же, что [assembleMatrix], с параметрами параллелизма из [context]. */
-    fun assembleMatrix(
+    public fun assembleMatrix(
         rows: Int,
         cols: Int,
         context: NumericsContext,
@@ -53,7 +53,7 @@ object ParallelAssembly {
      * Плотная матрица `rows × cols` в столбцовом порядке: элемент `(i, j)` вычисляется функцией
      * [cellFn]; параллелизм — по столбцам.
      */
-    fun assembleDense(
+    public fun assembleDense(
         rows: Int,
         cols: Int,
         parallel: Boolean = true,
@@ -61,7 +61,7 @@ object ParallelAssembly {
     ): DenseMatrix = assembleDenseImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), cellFn)
 
     /** То же, что [assembleDense], с параметрами параллелизма из [context]. */
-    fun assembleDense(
+    public fun assembleDense(
         rows: Int,
         cols: Int,
         context: NumericsContext,

@@ -13,10 +13,10 @@ package numerics
  * @property cols число столбцов.
  * @property data хранилище длиной `rows * cols` в столбцовом порядке.
  */
-class DenseMatrix private constructor(
-    val rows: Int,
-    val cols: Int,
-    val data: DoubleArray,
+public class DenseMatrix private constructor(
+    public val rows: Int,
+    public val cols: Int,
+    public val data: DoubleArray,
 ) {
     init {
         require(rows >= 0 && cols >= 0) { "Размеры матрицы не могут быть отрицательными: $rows x $cols" }
@@ -24,29 +24,29 @@ class DenseMatrix private constructor(
     }
 
     /** Истина, если число строк равно числу столбцов. */
-    val isSquare: Boolean get() = rows == cols
+    public val isSquare: Boolean get() = rows == cols
 
     private fun checkIndex(i: Int, j: Int) {
         require(i in 0 until rows && j in 0 until cols) { "Индекс ($i, $j) вне матрицы $rows x $cols" }
     }
 
     /** Возвращает элемент (i, j); бросает [IllegalArgumentException], если индекс вне матрицы. */
-    operator fun get(i: Int, j: Int): Double {
+    public operator fun get(i: Int, j: Int): Double {
         checkIndex(i, j)
         return data[i + j * rows]
     }
 
     /** Записывает [v] в элемент (i, j); бросает [IllegalArgumentException], если индекс вне матрицы. */
-    operator fun set(i: Int, j: Int, v: Double) {
+    public operator fun set(i: Int, j: Int, v: Double) {
         checkIndex(i, j)
         data[i + j * rows] = v
     }
 
     /** Возвращает независимую копию матрицы (массив данных копируется). */
-    fun copy(): DenseMatrix = DenseMatrix(rows, cols, data.copyOf())
+    public fun copy(): DenseMatrix = DenseMatrix(rows, cols, data.copyOf())
 
     /** Возвращает новую матрицу cols x rows — транспонированную копию. */
-    fun transpose(): DenseMatrix {
+    public fun transpose(): DenseMatrix {
         val t = DoubleArray(rows * cols)
         for (j in 0 until cols) {
             val base = j * rows
@@ -56,23 +56,25 @@ class DenseMatrix private constructor(
     }
 
     /** Возвращает копию строки [i] длиной [cols]; бросает [IllegalArgumentException] при недопустимом индексе. */
-    fun row(i: Int): DoubleArray {
+    public fun row(i: Int): DoubleArray {
         require(i in 0 until rows) { "Индекс строки $i вне матрицы $rows x $cols" }
         return DoubleArray(cols) { j -> data[i + j * rows] }
     }
 
     /** Возвращает копию столбца [j] длиной [rows]; бросает [IllegalArgumentException] при недопустимом индексе. */
-    fun column(j: Int): DoubleArray {
+    public fun column(j: Int): DoubleArray {
         require(j in 0 until cols) { "Индекс столбца $j вне матрицы $rows x $cols" }
         return data.copyOfRange(j * rows, (j + 1) * rows)
     }
 
     /** Возвращает копию матрицы в строковом формате: массив из [rows] строк длиной [cols]. */
-    fun toRows(): Array<DoubleArray> = Array(rows) { i -> DoubleArray(cols) { j -> data[i + j * rows] } }
+    public fun toRows(): Array<DoubleArray> = Array(rows) { i -> DoubleArray(cols) { j -> data[i + j * rows] } }
 
+    /** Матрицы равны, если совпадают размеры и все элементы (сравнение через [DoubleArray.contentEquals]). */
     override fun equals(other: Any?): Boolean =
         other is DenseMatrix && rows == other.rows && cols == other.cols && data.contentEquals(other.data)
 
+    /** Хеш-код, согласованный с [equals]: по размерам и содержимому. */
     override fun hashCode(): Int = 31 * (31 * rows + cols) + data.contentHashCode()
 
     /** Размеры и не более чем 6 x 6 верхних левых элементов; усечение обозначается многоточием. */
@@ -92,17 +94,18 @@ class DenseMatrix private constructor(
         return sb.toString()
     }
 
-    companion object {
+    /** Фабрики создания матриц. */
+    public companion object {
         private const val PREVIEW = 6
 
         /** Создаёт нулевую матрицу rows x cols; бросает [IllegalArgumentException] при отрицательных размерах. */
-        fun zeros(rows: Int, cols: Int): DenseMatrix {
+        public fun zeros(rows: Int, cols: Int): DenseMatrix {
             require(rows >= 0 && cols >= 0) { "Размеры матрицы не могут быть отрицательными: $rows x $cols" }
             return DenseMatrix(rows, cols, DoubleArray(rows * cols))
         }
 
         /** Создаёт единичную матрицу n x n. */
-        fun identity(n: Int): DenseMatrix {
+        public fun identity(n: Int): DenseMatrix {
             val m = zeros(n, n)
             for (i in 0 until n) m.data[i + i * n] = 1.0
             return m
@@ -112,7 +115,7 @@ class DenseMatrix private constructor(
          * Строит матрицу из массива строк, копируя данные. Пустой массив даёт матрицу 0 x 0.
          * Бросает [IllegalArgumentException], если строки имеют разную длину.
          */
-        fun fromRows(rows: Array<DoubleArray>): DenseMatrix {
+        public fun fromRows(rows: Array<DoubleArray>): DenseMatrix {
             if (rows.isEmpty()) return DenseMatrix(0, 0, DoubleArray(0))
             val n = rows.size
             val cols = rows[0].size
@@ -132,10 +135,10 @@ class DenseMatrix private constructor(
          * переданным массивом, и все последующие изменения массива видны через неё (и наоборот).
          * Бросает [IllegalArgumentException], если размеры отрицательны или длина массива не равна `rows * cols`.
          */
-        fun fromColumnMajor(rows: Int, cols: Int, data: DoubleArray): DenseMatrix = DenseMatrix(rows, cols, data)
+        public fun fromColumnMajor(rows: Int, cols: Int, data: DoubleArray): DenseMatrix = DenseMatrix(rows, cols, data)
 
         /** Строит матрицу rows x cols, вычисляя каждый элемент (i, j) функцией [cell]. */
-        fun build(rows: Int, cols: Int, cell: (Int, Int) -> Double): DenseMatrix {
+        public fun build(rows: Int, cols: Int, cell: (Int, Int) -> Double): DenseMatrix {
             val m = zeros(rows, cols)
             val data = m.data
             for (j in 0 until cols) {
@@ -146,7 +149,7 @@ class DenseMatrix private constructor(
         }
 
         /** Создаёт диагональную матрицу n x n с элементами [d] на диагонали, где n — длина [d]. */
-        fun diagonal(d: DoubleArray): DenseMatrix {
+        public fun diagonal(d: DoubleArray): DenseMatrix {
             val n = d.size
             val m = zeros(n, n)
             for (i in 0 until n) m.data[i + i * n] = d[i]

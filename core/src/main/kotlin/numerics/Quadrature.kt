@@ -11,7 +11,7 @@ import kotlin.math.abs
  *
  * @param nodesPerSub число узлов на каждом подынтервале (не меньше 1)
  */
-class GaussLegendre(val nodesPerSub: Int = 8) {
+public class GaussLegendre(public val nodesPerSub: Int = 8) {
 
     private val refNodes: DoubleArray
     private val refWeights: DoubleArray
@@ -29,7 +29,7 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
      *
      * @throws IllegalArgumentException если точек меньше двух или они не строго возрастают
      */
-    fun integrate(breakpoints: DoubleArray, f: (Double) -> Double): Double {
+    public fun integrate(breakpoints: DoubleArray, f: (Double) -> Double): Double {
         require(breakpoints.size >= 2) { "разбиение должно содержать не менее двух точек, получено ${breakpoints.size}" }
         for (k in 0 until breakpoints.size - 1) {
             require(breakpoints[k] < breakpoints[k + 1]) {
@@ -54,7 +54,7 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
      * Интеграл по одному отрезку от `lo` до `hi`. Допускается `lo > hi` — тогда концы
      * переставляются и результат берётся со знаком минус; при `lo == hi` возвращается 0.
      */
-    fun integrateInterval(lo: Double, hi: Double, f: (Double) -> Double): Double =
+    public fun integrateInterval(lo: Double, hi: Double, f: (Double) -> Double): Double =
         when {
             lo == hi -> 0.0
             lo > hi -> -integrateInterval(hi, lo, f)
@@ -62,9 +62,10 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
         }
 
     /** Эталонные узлы и веса на `[-1, 1]` (возвращаются копии внутренних массивов). */
-    fun refNodesWeights(): Pair<DoubleArray, DoubleArray> = refNodes.copyOf() to refWeights.copyOf()
+    public fun refNodesWeights(): Pair<DoubleArray, DoubleArray> = refNodes.copyOf() to refWeights.copyOf()
 
-    companion object {
+    /** Вычисление эталонных узлов и весов Гаусса–Лежандра. */
+    public companion object {
         /**
          * Узлы и веса Гаусса–Лежандра на `[-1, 1]` для `m` точек: метод Ньютона по нулям
          * многочлена Лежандра `P_m` от начального приближения `cos(π(i + 3/4)/(m + 1/2))`,
@@ -73,7 +74,7 @@ class GaussLegendre(val nodesPerSub: Int = 8) {
          * @throws IllegalArgumentException если `m < 1`
          * @throws IllegalStateException если итерации Ньютона для какого-либо узла не сошлись
          */
-        fun gaussLegendreReference(m: Int): Pair<DoubleArray, DoubleArray> {
+        public fun gaussLegendreReference(m: Int): Pair<DoubleArray, DoubleArray> {
             require(m >= 1) { "число узлов должно быть не меньше 1, получено $m" }
             val maxIter = 100
             val nodes = DoubleArray(m)

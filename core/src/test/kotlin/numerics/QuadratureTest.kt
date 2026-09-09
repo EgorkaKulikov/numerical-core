@@ -35,10 +35,10 @@ class QuadratureTest {
     }
 
     /**
-     * Regression guard for the Newton iteration over Legendre zeros (early-exit fix):
-     * for every order m the rule must be exact on the monomial t^(2m-1) (degree 2m-1),
-     * which is only possible if Newton converged to the TRUE nodes. If the loop had
-     * exited early/incorrectly the nodes would drift and this integral would be wrong.
+     * Регрессионная защита для итераций Ньютона по нулям многочлена Лежандра: для каждого
+     * порядка m правило должно быть точным на мономе t^(2m-1) (степень 2m-1), что возможно
+     * только при сходимости Ньютона к истинным узлам. Преждевременный выход из цикла
+     * сдвинул бы узлы, и этот интеграл был бы неверен.
      */
     @TestFactory fun newtonNodesExactUpToDegree2mMinus1(): List<DynamicTest> = (2..12).map { m ->
         DynamicTest.dynamicTest("m=$m") {
@@ -47,15 +47,15 @@ class QuadratureTest {
             val expected = 1.0 / (deg + 1) // ∫_0^1 t^deg dt
             val got = q.integrate(bp01) { t -> Math.pow(t, deg.toDouble()) }
             assertEquals(expected, got, 1e-12, "m=$m deg=$deg")
-            // Weights on [-1,1] must sum to the interval length (2).
+            // Сумма весов на [-1,1] равна длине отрезка (2).
             val (_, w) = GaussLegendre.gaussLegendreReference(m)
             assertEquals(2.0, w.sum(), 1e-13, "weights sum m=$m")
         }
     }
 
     @Test fun compositeSubdivisionConsistent() {
-        // Both single-interval and split quadratures approximate the same integral;
-        // for a smooth integrand with 8 nodes/sub they must agree closely.
+        // Квадратуры по одному отрезку и по разбиению приближают один и тот же интеграл;
+        // для гладкой подынтегральной функции с 8 узлами на подынтервал они должны совпадать близко.
         val q = GaussLegendre(8)
         val analytic = (exp(2.0) - 1.0) / 2.0 // ∫_0^1 e^{2t} dt
         val whole = q.integrate(doubleArrayOf(0.0, 1.0)) { t -> exp(2.0 * t) }

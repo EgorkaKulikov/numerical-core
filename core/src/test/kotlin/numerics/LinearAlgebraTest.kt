@@ -22,7 +22,7 @@ class LinearAlgebraTest {
     }
 
     @Test fun solve3x3() {
-        // identity-shifted system with known solution
+        // система с единичным сдвигом и известным решением
         val a = arrayOf(
             doubleArrayOf(2.0, 0.0, 0.0),
             doubleArrayOf(0.0, 4.0, 0.0),
@@ -57,7 +57,7 @@ class LinearAlgebraTest {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0), doubleArrayOf(5.0, 6.0))
         val w = doubleArrayOf(1.0, 1.0, 1.0)
         val g = LinearAlgebra.atWa(a, w)
-        // A^T A computed directly
+        // A^T A, вычисленное напрямую
         val at = arrayOf(doubleArrayOf(1.0, 3.0, 5.0), doubleArrayOf(2.0, 4.0, 6.0))
         val expected = LinearAlgebra.matMat(at, a)
         for (i in 0..1) for (j in 0..1) assertEquals(expected[i][j], g[i][j], 1e-9)

@@ -22,7 +22,7 @@ import numerics.backend.MatrixNorm
  *   ([Conditioning.conditionEstimate]).
  * @property tolerance порог невязки, при котором оценка считается достоверной; строго положителен.
  */
-data class ConditionEstimate(
+public data class ConditionEstimate(
     val condInf: Double,
     val inversionResidual: Double,
     val tolerance: Double,
@@ -36,7 +36,7 @@ data class ConditionEstimate(
         get() = condInf.isFinite() && inversionResidual <= tolerance
 
     /** [condInf], если оценка достоверна, иначе `null`. */
-    fun valueOrNull(): Double? = if (isReliable) condInf else null
+    public fun valueOrNull(): Double? = if (isReliable) condInf else null
 }
 
 /**
@@ -44,7 +44,7 @@ data class ConditionEstimate(
  * строит границу прямой ошибки. Варианты различаются гарантиями, стоимостью и
  * требованиями к матрице.
  */
-enum class ConditionSource {
+public enum class ConditionSource {
     /**
      * Явное обращение матрицы ([Conditioning.conditionInf]): O(n³), без требований к `A`,
      * достоверность контролируется невязкой обращения.
@@ -77,9 +77,9 @@ enum class ConditionSource {
  * Три режима разделены конструкторами: получить число можно только явным
  * сопоставлением либо через [relativeBoundOrNull], который возвращает `null`, где числа нет.
  */
-sealed interface ForwardError {
+public sealed interface ForwardError {
     /** Измеренная относительная обратная ошибка; доступна во всех режимах. */
-    val backwardError: Double
+    public val backwardError: Double
 
     /**
      * Оценка существует и достоверна: `‖x − x*‖∞ / ‖x*‖∞ <= [relativeBound]`.
@@ -87,7 +87,7 @@ sealed interface ForwardError {
      * @property cond использованное число обусловленности.
      * @property relativeBound произведение `cond · backwardError`.
      */
-    data class Bounded(
+    public data class Bounded(
         override val backwardError: Double,
         val cond: Double,
         val relativeBound: Double,
@@ -97,27 +97,27 @@ sealed interface ForwardError {
      * Конечной границы нет: матрица численно вырождена — обращение не удалось либо
      * спектральная оценка дала нулевое собственное значение.
      */
-    data class NoFiniteBound(override val backwardError: Double) : ForwardError
+    public data class NoFiniteBound(override val backwardError: Double) : ForwardError
 
     /**
      * Оценка `cond` конечна, но недостоверна ([ConditionEstimate.isReliable] равно `false`).
      *
      * @property condition сама недостоверная оценка — невязка обращения лежит в ней.
      */
-    data class Unreliable(
+    public data class Unreliable(
         override val backwardError: Double,
         val condition: ConditionEstimate,
     ) : ForwardError
 
     /** Граница прямой ошибки или `null` в режимах [NoFiniteBound] и [Unreliable]. */
-    fun relativeBoundOrNull(): Double? = (this as? Bounded)?.relativeBound
+    public fun relativeBoundOrNull(): Double? = (this as? Bounded)?.relativeBound
 
     /**
      * Сколько десятичных разрядов результата заведомо уцелело: `−log10(границы)`,
      * обрезанное снизу нулём и сверху 16 (полная мантисса double).
      * `null` там же, где `null` у [relativeBoundOrNull].
      */
-    fun survivingDigitsOrNull(): Double? {
+    public fun survivingDigitsOrNull(): Double? {
         val bound = relativeBoundOrNull() ?: return null
         if (bound <= 0.0) return 16.0
         return minOf(16.0, maxOf(0.0, -log10(bound)))
@@ -139,23 +139,23 @@ sealed interface ForwardError {
  * матриц надёжнее спектральная оценка [conditionSymmetric]: ортогональные преобразования
  * не обращают матрицу и на вырожденной честно дают нулевое собственное значение.
  */
-object Conditioning {
+public object Conditioning {
 
     /**
      * Порог достоверности оценки [conditionInf] по невязке обращения `‖A·A⁻¹ − I‖∞`.
      * Соответствует потере половины значащих разрядов: при большей невязке в оценке
      * `cond` не остаётся и половины верных цифр.
      */
-    const val INVERSION_RESIDUAL_TOLERANCE: Double = 1e-8
+    public const val INVERSION_RESIDUAL_TOLERANCE: Double = 1e-8
 
     /** Строчная норма матрицы `‖A‖∞ = max_i Σ_j |a_ij|`; матрица должна быть непустой. */
-    fun matrixNormInf(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
+    public fun matrixNormInf(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
         Shapes.requireNonEmpty(a, "матрица A")
         return backend.norm(a, MatrixNorm.INF)
     }
 
     /** Строчная норма матрицы над массивом строк; см. перегрузку с [DenseMatrix]. */
-    fun matrixNormInf(a: Array<DoubleArray>): Double = matrixNormInf(rows(a))
+    public fun matrixNormInf(a: Array<DoubleArray>): Double = matrixNormInf(rows(a))
 
     /**
      * Обращение квадратной матрицы через LU-разложение.
@@ -164,7 +164,7 @@ object Conditioning {
      *   нечисловые значения. Достоверность конечного результата не гарантируется — её
      *   измеряет [inversionResidual].
      */
-    fun inverse(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): DenseMatrix? {
+    public fun inverse(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): DenseMatrix? {
         Shapes.requireSquare(a, "матрица A")
         val inv = backend.inverse(a) ?: return null
         for (v in inv.data) if (!v.isFinite()) return null
@@ -177,10 +177,10 @@ object Conditioning {
         ReplaceWith("inverse(DenseMatrix.fromRows(a))"),
         DeprecationLevel.WARNING,
     )
-    fun inverse(a: Array<DoubleArray>): Array<DoubleArray>? = inverse(rows(a))?.toRows()
+    public fun inverse(a: Array<DoubleArray>): Array<DoubleArray>? = inverse(rows(a))?.toRows()
 
     /** Невязка обращения `‖A·B − I‖∞` — мера того, сколько разрядов уцелело в `B ≈ A⁻¹`. */
-    fun inversionResidual(a: DenseMatrix, inv: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
+    public fun inversionResidual(a: DenseMatrix, inv: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
         Shapes.requireSquare(a, "матрица A")
         Shapes.requireSquare(inv, "матрица A⁻¹")
         Shapes.requireSameShape(a, inv)
@@ -192,7 +192,7 @@ object Conditioning {
     }
 
     /** Невязка обращения над массивами строк; см. перегрузку с [DenseMatrix]. */
-    fun inversionResidual(a: Array<DoubleArray>, inv: Array<DoubleArray>): Double =
+    public fun inversionResidual(a: Array<DoubleArray>, inv: Array<DoubleArray>): Double =
         inversionResidual(rows(a), rows(inv))
 
     /**
@@ -204,7 +204,7 @@ object Conditioning {
      * @param tolerance порог достоверности по невязке обращения; строго положителен.
      * @throws IllegalArgumentException если матрица пуста, не квадратна или `tolerance <= 0`.
      */
-    fun conditionInf(
+    public fun conditionInf(
         a: DenseMatrix,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
         backend: LinAlgBackend = Backends.default(),
@@ -218,7 +218,7 @@ object Conditioning {
     }
 
     /** Оценка обусловленности через обращение над массивом строк; см. перегрузку с [DenseMatrix]. */
-    fun conditionInf(
+    public fun conditionInf(
         a: Array<DoubleArray>,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
     ): ConditionEstimate = conditionInf(rows(a), tolerance)
@@ -235,7 +235,7 @@ object Conditioning {
      *
      * @throws IllegalArgumentException если матрица пуста, не квадратна или `tolerance <= 0`.
      */
-    fun conditionEstimate(
+    public fun conditionEstimate(
         a: DenseMatrix,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
         backend: LinAlgBackend = Backends.default(),
@@ -255,33 +255,33 @@ object Conditioning {
      * @throws IllegalArgumentException если матрица пуста, не квадратна или её асимметрия
      *   превышает `1e-12 · ‖A‖∞`.
      */
-    fun symmetricEigenvalues(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): DoubleArray {
+    public fun symmetricEigenvalues(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): DoubleArray {
         Shapes.requireSquare(a, "матрица A")
         Shapes.requireSymmetric(a, backend.norm(a, MatrixNorm.INF), "матрица A")
         return backend.symmetricEigenvalues(a)
     }
 
     /** Собственные значения над массивом строк; см. перегрузку с [DenseMatrix]. */
-    fun symmetricEigenvalues(a: Array<DoubleArray>): DoubleArray = symmetricEigenvalues(rows(a))
+    public fun symmetricEigenvalues(a: Array<DoubleArray>): DoubleArray = symmetricEigenvalues(rows(a))
 
     /**
      * Наименьшее по модулю собственное значение симметричной матрицы — её `σ_min`.
      * Ровно `0.0` означает численную вырожденность.
      */
-    fun smallestMagnitudeEigenvalue(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
+    public fun smallestMagnitudeEigenvalue(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
         var m = Double.POSITIVE_INFINITY
         for (v in symmetricEigenvalues(a, backend)) m = minOf(m, abs(v))
         return m
     }
 
     /** Наименьшее по модулю собственное значение над массивом строк; см. перегрузку с [DenseMatrix]. */
-    fun smallestMagnitudeEigenvalue(a: Array<DoubleArray>): Double = smallestMagnitudeEigenvalue(rows(a))
+    public fun smallestMagnitudeEigenvalue(a: Array<DoubleArray>): Double = smallestMagnitudeEigenvalue(rows(a))
 
     /**
      * Спектральное число обусловленности симметричной матрицы `max|λ_i| / min|λ_i|`.
      * Возвращает [Double.POSITIVE_INFINITY] при `min|λ_i| = 0`.
      */
-    fun conditionSymmetric(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
+    public fun conditionSymmetric(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
         var lo = Double.POSITIVE_INFINITY
         var hi = 0.0
         for (v in symmetricEigenvalues(a, backend)) {
@@ -292,7 +292,7 @@ object Conditioning {
     }
 
     /** Спектральное число обусловленности над массивом строк; см. перегрузку с [DenseMatrix]. */
-    fun conditionSymmetric(a: Array<DoubleArray>): Double = conditionSymmetric(rows(a))
+    public fun conditionSymmetric(a: Array<DoubleArray>): Double = conditionSymmetric(rows(a))
 
     /**
      * Относительная обратная ошибка решения `A x = b`:
@@ -306,7 +306,7 @@ object Conditioning {
      * @throws IllegalArgumentException если матрица пуста, не квадратна или длины `b`, `x`
      *   не равны её порядку.
      */
-    fun relativeBackwardError(
+    public fun relativeBackwardError(
         a: DenseMatrix,
         b: DoubleArray,
         x: DoubleArray,
@@ -323,7 +323,7 @@ object Conditioning {
     }
 
     /** Обратная ошибка над массивом строк; см. перегрузку с [DenseMatrix]. */
-    fun relativeBackwardError(a: Array<DoubleArray>, b: DoubleArray, x: DoubleArray): Double =
+    public fun relativeBackwardError(a: Array<DoubleArray>, b: DoubleArray, x: DoubleArray): Double =
         relativeBackwardError(rows(a), b, x)
 
     /**
@@ -336,7 +336,7 @@ object Conditioning {
      *
      * @param backwardError результат [relativeBackwardError]; требуется конечным и неотрицательным.
      */
-    fun forwardError(condition: ConditionEstimate, backwardError: Double): ForwardError {
+    public fun forwardError(condition: ConditionEstimate, backwardError: Double): ForwardError {
         require(backwardError.isFinite() && backwardError >= 0.0) {
             "forwardError: обратная ошибка должна быть конечной и неотрицательной, получено $backwardError"
         }
@@ -358,7 +358,7 @@ object Conditioning {
      *
      * @throws IllegalArgumentException если матрица не симметрична.
      */
-    fun forwardErrorSymmetric(
+    public fun forwardErrorSymmetric(
         a: DenseMatrix,
         backwardError: Double,
         backend: LinAlgBackend = Backends.default(),
@@ -375,7 +375,7 @@ object Conditioning {
     }
 
     /** Граница прямой ошибки для симметричной матрицы над массивом строк; см. перегрузку с [DenseMatrix]. */
-    fun forwardErrorSymmetric(a: Array<DoubleArray>, backwardError: Double): ForwardError =
+    public fun forwardErrorSymmetric(a: Array<DoubleArray>, backwardError: Double): ForwardError =
         forwardErrorSymmetric(rows(a), backwardError)
 
     /** Адаптер массива строк: пустой массив отвергается здесь, рваный — в [DenseMatrix.fromRows]. */
@@ -386,23 +386,28 @@ object Conditioning {
 
     // Перегрузки с NumericsContext используют его реализацию линейной алгебры.
 
-    fun inverse(a: DenseMatrix, context: NumericsContext): DenseMatrix? = inverse(a, context.backend)
+    /** То же, что [inverse], с реализацией линейной алгебры из [context]. */
+    public fun inverse(a: DenseMatrix, context: NumericsContext): DenseMatrix? = inverse(a, context.backend)
 
-    fun conditionInf(
+    /** То же, что [conditionInf], с реализацией линейной алгебры из [context]. */
+    public fun conditionInf(
         a: DenseMatrix,
         context: NumericsContext,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
     ): ConditionEstimate = conditionInf(a, tolerance, context.backend)
 
-    fun conditionEstimate(
+    /** То же, что [conditionEstimate], с реализацией линейной алгебры из [context]. */
+    public fun conditionEstimate(
         a: DenseMatrix,
         context: NumericsContext,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
     ): ConditionEstimate = conditionEstimate(a, tolerance, context.backend)
 
-    fun symmetricEigenvalues(a: DenseMatrix, context: NumericsContext): DoubleArray =
+    /** То же, что [symmetricEigenvalues], с реализацией линейной алгебры из [context]. */
+    public fun symmetricEigenvalues(a: DenseMatrix, context: NumericsContext): DoubleArray =
         symmetricEigenvalues(a, context.backend)
 
-    fun conditionSymmetric(a: DenseMatrix, context: NumericsContext): Double =
+    /** То же, что [conditionSymmetric], с реализацией линейной алгебры из [context]. */
+    public fun conditionSymmetric(a: DenseMatrix, context: NumericsContext): Double =
         conditionSymmetric(a, context.backend)
 }

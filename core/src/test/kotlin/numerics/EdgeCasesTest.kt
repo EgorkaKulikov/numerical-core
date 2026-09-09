@@ -80,8 +80,8 @@ class EdgeCasesTest {
         dynamicTest("resolve(auto) — нативная iff доступна") {
             assertEquals(Backends.isNativeAvailable(), Backends.resolve("auto").isNative)
         },
-        dynamicTest("resolve(multik) — IllegalArgumentException с перечислением допустимых") {
-            val e = assertFailsWith<IllegalArgumentException> { Backends.resolve("multik") }
+        dynamicTest("resolve(unknown) — IllegalArgumentException с перечислением допустимых") {
+            val e = assertFailsWith<IllegalArgumentException> { Backends.resolve("unknown") }
             val msg = e.message!!
             assertTrue(msg.contains("native") && msg.contains("java") && msg.contains("auto"), msg)
         },
