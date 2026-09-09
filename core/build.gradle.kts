@@ -109,11 +109,11 @@ kover {
         // порог — фактическое значение минус 2 %, чтобы результат не зависел от машины.
         verify {
             rule("Покрытие строк") {
-                minBound(89)
+                minBound(97)
             }
             rule("Покрытие ветвей") {
                 bound {
-                    minValue = 83
+                    minValue = 93
                     coverageUnits = CoverageUnit.BRANCH
                 }
             }

@@ -73,6 +73,7 @@ public class GaussLegendre(public val nodesPerSub: Int = 8) {
          *
          * @throws IllegalArgumentException если `m < 1`
          * @throws IllegalStateException если итерации Ньютона для какого-либо узла не сошлись
+         *   (исключение — защита от бесконечного цикла, на практике не возникает)
          */
         public fun gaussLegendreReference(m: Int): Pair<DoubleArray, DoubleArray> {
             require(m >= 1) { "число узлов должно быть не меньше 1, получено $m" }
