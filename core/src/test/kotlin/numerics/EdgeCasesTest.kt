@@ -21,12 +21,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Граничные случаи публичного API: реестр реализаций, матрицы 1×1, прямоугольные и пустые
- * матрицы, большие размеры, вырожденность разной структуры, численно экстремальные масштабы,
- * крайние параметры квадратуры и параллельной сборки, границы [measured].
+ * Edge cases of the public API: backend registry, 1×1 matrices, rectangular and empty
+ * matrices, large sizes, singularity of different structure, numerically extreme scales,
+ * extreme quadrature and parallel assembly parameters, boundaries of [measured].
  *
- * Каждый случай — отдельный DynamicTest; операции линейной алгебры гоняются на обеих
- * реализациях (нативная — через `assumeTrue(isNativeAvailable())`).
+ * Each case is a separate DynamicTest; linear algebra operations run on both
+ * backends (the native one via `assumeTrue(isNativeAvailable())`).
  */
 @Tag("fast")
 class EdgeCasesTest {
@@ -35,15 +35,15 @@ class EdgeCasesTest {
     private fun v(vararg x: Double): DoubleArray = doubleArrayOf(*x)
 
     private fun assertVec(expected: DoubleArray, actual: DoubleArray, tol: Double = 1e-12, what: String = "") {
-        assertEquals(expected.size, actual.size, "$what: длина")
+        assertEquals(expected.size, actual.size, "$what: length")
         for (i in expected.indices) assertTrue(abs(expected[i] - actual[i]) <= tol, "$what[$i]: ${expected[i]} vs ${actual[i]}")
     }
 
-    /** Один DynamicTest на реализацию; для нативной — пропуск, если она не загрузилась. */
+    /** One DynamicTest per backend; the native one is skipped if it failed to load. */
     private fun perBackend(name: String, body: (LinAlgBackend) -> Unit): List<DynamicTest> = listOf(
         dynamicTest("$name [java]") { body(Backends.java()) },
         dynamicTest("$name [native]") {
-            assumeTrue(Backends.isNativeAvailable(), "нативная BLAS/LAPACK недоступна")
+            assumeTrue(Backends.isNativeAvailable(), "native BLAS/LAPACK is unavailable")
             body(Backends.native())
         },
     )
@@ -51,43 +51,43 @@ class EdgeCasesTest {
     private fun <T> cases(items: List<Pair<String, T>>, body: (LinAlgBackend, T) -> Unit): List<DynamicTest> =
         items.flatMap { (name, item) -> perBackend(name) { b -> body(b, item) } }
 
-    // --- Реестр реализаций -----------------------------------------------------------
+    // --- Backend registry -----------------------------------------------------------
 
     @TestFactory
     fun registry(): List<DynamicTest> = listOf(
-        dynamicTest("available() непустой и содержит java()") {
+        dynamicTest("available() is non-empty and contains java()") {
             val all = Backends.available()
             assertTrue(all.isNotEmpty())
-            assertTrue(all.any { it === Backends.java() }, "java() должен быть в available()")
+            assertTrue(all.any { it === Backends.java() }, "java() must be in available()")
         },
-        dynamicTest("available() содержит native() ровно тогда, когда isNativeAvailable()") {
+        dynamicTest("available() contains native() exactly when isNativeAvailable()") {
             val hasNative = Backends.available().any { it.isNative }
             assertEquals(Backends.isNativeAvailable(), hasNative)
             if (hasNative) assertTrue(Backends.available().any { it === Backends.native() })
         },
-        dynamicTest("имена реализаций в available() различны") {
+        dynamicTest("backend names in available() are distinct") {
             val names = Backends.available().map { it.name }
-            assertEquals(names.size, names.toSet().size, "дубли имён: $names")
+            assertEquals(names.size, names.toSet().size, "duplicate names: $names")
         },
-        dynamicTest("describe() содержит имя реализации по умолчанию") {
+        dynamicTest("describe() contains the default backend name") {
             assertTrue(Backends.describe().contains(Backends.default().name), Backends.describe())
         },
-        dynamicTest("resolve(java) — не нативная") { assertTrue(!Backends.resolve("java").isNative) },
-        dynamicTest("resolve(native) — нативная") {
+        dynamicTest("resolve(java) is not native") { assertTrue(!Backends.resolve("java").isNative) },
+        dynamicTest("resolve(native) is native") {
             assumeTrue(Backends.isNativeAvailable())
             assertTrue(Backends.resolve("native").isNative)
         },
-        dynamicTest("resolve(auto) — нативная iff доступна") {
+        dynamicTest("resolve(auto) is native iff available") {
             assertEquals(Backends.isNativeAvailable(), Backends.resolve("auto").isNative)
         },
-        dynamicTest("resolve(unknown) — IllegalArgumentException с перечислением допустимых") {
+        dynamicTest("resolve(unknown) throws IllegalArgumentException listing the allowed values") {
             val e = assertFailsWith<IllegalArgumentException> { Backends.resolve("unknown") }
             val msg = e.message!!
             assertTrue(msg.contains("native") && msg.contains("java") && msg.contains("auto"), msg)
         },
     )
 
-    // --- Матрицы 1×1 -------------------------------------------------------------------
+    // --- 1×1 matrices -------------------------------------------------------------------
 
     @TestFactory
     fun oneByOne(): List<DynamicTest> = perBackend("1×1") { b ->
@@ -99,10 +99,10 @@ class EdgeCasesTest {
         assertVec(v(6.0), LinearAlgebra.matMat(m(v(2.0)), m(v(3.0)), b).data, what = "matMat")
     }
 
-    // --- Прямоугольные -------------------------------------------------------------------
+    // --- Rectangular -------------------------------------------------------------------
 
     @TestFactory
-    fun rectangular(): List<DynamicTest> = perBackend("прямоугольные") { b ->
+    fun rectangular(): List<DynamicTest> = perBackend("rectangular") { b ->
         val a35 = DenseMatrix.build(3, 5) { i, j -> (i + 2 * j).toDouble() }
         assertEquals(3, LinearAlgebra.matVec(a35, DoubleArray(5) { 1.0 }, b).size, "matVec 3×5·5")
         assertEquals(5, LinearAlgebra.matTransVec(a35, DoubleArray(3) { 1.0 }, b).size, "matTransVec 3×5ᵀ·3")
@@ -119,10 +119,10 @@ class EdgeCasesTest {
         }
     }
 
-    // --- Пустые ---------------------------------------------------------------------------
+    // --- Empty ---------------------------------------------------------------------------
 
     @TestFactory
-    fun empty(): List<DynamicTest> = perBackend("пустые") { b ->
+    fun empty(): List<DynamicTest> = perBackend("empty") { b ->
         assertFailsWith<IllegalArgumentException>("matVec 0×0") {
             LinearAlgebra.matVec(DenseMatrix.zeros(0, 0), DoubleArray(0), b)
         }
@@ -130,7 +130,7 @@ class EdgeCasesTest {
         assertEquals(0, DenseMatrix.fromRows(emptyArray()).rows)
     }
 
-    // --- Большие размеры ---------------------------------------------------------------------
+    // --- Large sizes ---------------------------------------------------------------------
 
     @TestFactory
     fun large(): List<DynamicTest> {
@@ -140,7 +140,7 @@ class EdgeCasesTest {
         val nEig = if (native) 500 else 200
         val tag = if (native) "native" else "java"
         return listOf(
-            dynamicTest("solve на диагонально доминирующей $nSolve×$nSolve [$tag]") {
+            dynamicTest("solve on a diagonally dominant $nSolve×$nSolve [$tag]") {
                 val a = DenseMatrix.fromRows(GoldenInputs.dd(nSolve))
                 val rhs = GoldenInputs.vec(nSolve)
                 val x = LinearAlgebra.solve(a, rhs, b)
@@ -148,9 +148,9 @@ class EdgeCasesTest {
                 var res = 0.0
                 for (i in rhs.indices) res = maxOf(res, abs(r[i] - rhs[i]))
                 val scale = b.norm(a, MatrixNorm.INF) * LinearAlgebra.normInf(x) + LinearAlgebra.normInf(rhs)
-                assertTrue(res <= 1e-10 * scale, "невязка $res при масштабе $scale")
+                assertTrue(res <= 1e-10 * scale, "residual $res at scale $scale")
             },
-            dynamicTest("symmetricEigenvalues на симметричной $nEig×$nEig: сумма = след [$tag]") {
+            dynamicTest("symmetricEigenvalues on a symmetric $nEig×$nEig: sum = trace [$tag]") {
                 val s = DenseMatrix.fromRows(GoldenInputs.sym(nEig))
                 val eig = Conditioning.symmetricEigenvalues(s, b)
                 var trace = 0.0
@@ -158,7 +158,7 @@ class EdgeCasesTest {
                 assertEquals(nEig, eig.size)
                 assertTrue(abs(eig.sum() - trace) <= 1e-8 * b.norm(s, MatrixNorm.INF), "Σλ=${eig.sum()} vs tr=$trace")
             },
-            dynamicTest("conditionEstimate на диагонально доминирующей $nSolve×$nSolve за разумное время [$tag]") {
+            dynamicTest("conditionEstimate on a diagonally dominant $nSolve×$nSolve in reasonable time [$tag]") {
                 val a = DenseMatrix.fromRows(GoldenInputs.dd(nSolve))
                 val est = assertTimeoutPreemptively(Duration.ofSeconds(10), ThrowingSupplier { Conditioning.conditionEstimate(a, backend = b) })
                 assertTrue(est.condInf.isFinite() && est.condInf >= 1.0, "cond=${est.condInf}")
@@ -166,22 +166,22 @@ class EdgeCasesTest {
         )
     }
 
-    // --- Вырожденные разной структуры -----------------------------------------------------------
+    // --- Singular matrices of different structure -----------------------------------------------------------
 
     @TestFactory
-    fun singularStructures(): List<DynamicTest> = perBackend("вырожденные") { b ->
+    fun singularStructures(): List<DynamicTest> = perBackend("singular") { b ->
         val zero = DenseMatrix.zeros(3, 3)
-        assertFailsWith<IllegalStateException>("solve нулевой") { LinearAlgebra.solve(zero, v(1.0, 2.0, 3.0), b) }
-        assertNull(Conditioning.inverse(zero, b), "inverse нулевой")
-        assertEquals(Double.POSITIVE_INFINITY, Conditioning.conditionInf(zero, backend = b).condInf, "conditionInf нулевой")
-        assertEquals(Double.POSITIVE_INFINITY, Conditioning.conditionEstimate(zero, backend = b).condInf, "conditionEstimate нулевой")
+        assertFailsWith<IllegalStateException>("solve on zero matrix") { LinearAlgebra.solve(zero, v(1.0, 2.0, 3.0), b) }
+        assertNull(Conditioning.inverse(zero, b), "inverse of zero matrix")
+        assertEquals(Double.POSITIVE_INFINITY, Conditioning.conditionInf(zero, backend = b).condInf, "conditionInf of zero matrix")
+        assertEquals(Double.POSITIVE_INFINITY, Conditioning.conditionEstimate(zero, backend = b).condInf, "conditionEstimate of zero matrix")
         val rankDeficient = arrayOf(v(1.0, 2.0, 3.0), v(2.0, 4.0, 6.0), v(1.0, 1.0, 1.0))
-        assertFailsWith<IllegalStateException>("ранг-дефицит") { LinearAlgebra.solve(rankDeficient, v(1.0, 2.0, 3.0), b) }
-        // Нулевой диагональный элемент при невырожденной матрице — перестановка, а не вырожденность.
-        assertVec(v(2.0, 1.0), LinearAlgebra.solve(arrayOf(v(0.0, 1.0), v(1.0, 0.0)), v(1.0, 2.0), b), what = "перестановка")
+        assertFailsWith<IllegalStateException>("rank deficient") { LinearAlgebra.solve(rankDeficient, v(1.0, 2.0, 3.0), b) }
+        // A zero diagonal entry in a non-singular matrix is a permutation, not singularity.
+        assertVec(v(2.0, 1.0), LinearAlgebra.solve(arrayOf(v(0.0, 1.0), v(1.0, 0.0)), v(1.0, 2.0), b), what = "permutation")
     }
 
-    // --- Численно экстремальные --------------------------------------------------------------------
+    // --- Numerically extreme --------------------------------------------------------------------
 
     @TestFactory
     fun extremeScales(): List<DynamicTest> = cases(
@@ -191,59 +191,59 @@ class EdgeCasesTest {
         val rhs = v(1.0, 2.0, 3.0)
         val x = LinearAlgebra.solve(a, DoubleArray(3) { rhs[it] * scale }, b)
         assertVec(rhs, x, tol = 1e-15, what = "scale=$scale")
-    } + perBackend("Double.MIN_VALUE на диагонали") { b ->
+    } + perBackend("Double.MIN_VALUE on the diagonal") { b ->
         val a = arrayOf(v(Double.MIN_VALUE, 0.0), v(0.0, Double.MIN_VALUE))
         try {
             val x = LinearAlgebra.solve(a, v(1.0, 1.0), b)
-            assertTrue(x.all { it.isFinite() }, "без исключения решение обязано быть числовым: ${x.toList()}")
+            assertTrue(x.all { it.isFinite() }, "without an exception the solution must be finite: ${x.toList()}")
         } catch (_: IllegalStateException) {
-            // Допустимый исход: реализация честно отказалась.
+            // Acceptable outcome: the backend honestly refused.
         }
     }
 
-    // --- Квадратура ----------------------------------------------------------------------------
+    // --- Quadrature ----------------------------------------------------------------------------
 
     @TestFactory
     fun quadrature(): List<DynamicTest> = listOf(
-        dynamicTest("m=64: Σw=2, узлы в (−1, 1)") {
+        dynamicTest("m=64: Σw=2, nodes in (−1, 1)") {
             val (x, w) = GaussLegendre.gaussLegendreReference(64)
             assertEquals(2.0, w.sum(), 1e-14)
             assertTrue(x.all { it > -1.0 && it < 1.0 })
             val (x2, w2) = GaussLegendre(64).refNodesWeights()
             assertVec(x, x2, 0.0, "refNodes"); assertVec(w, w2, 0.0, "refWeights")
         },
-        dynamicTest("m=200: Σw=2 в 1e-13, узлы в (−1, 1)") {
+        dynamicTest("m=200: Σw=2 within 1e-13, nodes in (−1, 1)") {
             val (x, w) = GaussLegendre.gaussLegendreReference(200)
             assertEquals(2.0, w.sum(), 1e-13)
             assertTrue(x.all { it > -1.0 && it < 1.0 })
-            assertEquals(200, x.toSet().size, "узлы различны")
+            assertEquals(200, x.toSet().size, "nodes are distinct")
         },
-        dynamicTest("отрезок длины 1e-12 — конечный результат") {
+        dynamicTest("interval of length 1e-12 gives a finite result") {
             val r = GaussLegendre(8).integrate(v(0.0, 1e-12)) { t -> t * t + 1.0 }
             assertTrue(r.isFinite() && abs(r - 1e-12) <= 1e-24, "r=$r")
         },
-        dynamicTest("отрезок [−1e6, 1e6] от единицы — 2e6") {
+        dynamicTest("integral of 1 over [−1e6, 1e6] is 2e6") {
             assertEquals(2e6, GaussLegendre(8).integrate(v(-1e6, 1e6)) { 1.0 }, 2e6 * 1e-9)
         },
     )
 
-    // --- Параллельная сборка ---------------------------------------------------------------------
+    // --- Parallel assembly ---------------------------------------------------------------------
 
     @TestFactory
     fun parallelAssembly(): List<DynamicTest> = listOf(
-        dynamicTest("assembleDense 1×100000 совпадает с последовательным") {
+        dynamicTest("assembleDense 1×100000 matches sequential") {
             val f = { i: Int, j: Int -> i * 3.0 + j * 0.5 }
             val par = ParallelAssembly.assembleDense(1, 100_000, cellFn = f)
             val seq = ParallelAssembly.assembleDense(1, 100_000, parallel = false, cellFn = f)
             assertTrue(par.data.contentEquals(seq.data))
         },
-        dynamicTest("assembleDense 100000×1 совпадает с последовательным") {
+        dynamicTest("assembleDense 100000×1 matches sequential") {
             val f = { i: Int, j: Int -> i * 3.0 + j * 0.5 }
             val par = ParallelAssembly.assembleDense(100_000, 1, cellFn = f)
             val seq = ParallelAssembly.assembleDense(100_000, 1, parallel = false, cellFn = f)
             assertTrue(par.data.contentEquals(seq.data))
         },
-        dynamicTest("вложенный assembleDense на общем пуле не зависает") {
+        dynamicTest("nested assembleDense on the common pool does not hang") {
             val nested = { i: Int, j: Int ->
                 ParallelAssembly.assembleDense(3, 3) { a, c -> (a + c).toDouble() }.data.sum() + i + j
             }
@@ -257,13 +257,13 @@ class EdgeCasesTest {
 
     @TestFactory
     fun measuredBoundaries(): List<DynamicTest> = listOf(
-        dynamicTest("measured(-0.0) — AtNoiseLevel, как 0.0") { assertIs<Measured.AtNoiseLevel>(measured(-0.0)) },
-        dynamicTest("measured(Double.MIN_VALUE) — AtNoiseLevel") { assertIs<Measured.AtNoiseLevel>(measured(Double.MIN_VALUE)) },
-        dynamicTest("measured(1e-13, 1e-13) — граница включена: |value| >= threshold считается надёжным") {
+        dynamicTest("measured(-0.0) is AtNoiseLevel, like 0.0") { assertIs<Measured.AtNoiseLevel>(measured(-0.0)) },
+        dynamicTest("measured(Double.MIN_VALUE) is AtNoiseLevel") { assertIs<Measured.AtNoiseLevel>(measured(Double.MIN_VALUE)) },
+        dynamicTest("measured(1e-13, 1e-13): boundary included, |value| >= threshold counts as reliable") {
             assertIs<Measured.Reliable>(measured(1e-13, 1e-13))
             assertIs<Measured.AtNoiseLevel>(measured(Math.nextDown(1e-13), 1e-13))
         },
-        dynamicTest("measured(NaN) — AtNoiseLevel, значение сохранено") {
+        dynamicTest("measured(NaN) is AtNoiseLevel, value preserved") {
             val r = measured(Double.NaN)
             assertNotNull(r)
             assertIs<Measured.AtNoiseLevel>(r)

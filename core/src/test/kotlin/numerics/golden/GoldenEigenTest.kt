@@ -11,7 +11,7 @@ import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 
-/** Эталон `eigen.json`: `symmetricEigenvalues` (отсортированные) и `conditionSymmetric`. */
+/** Golden reference `eigen.json`: `symmetricEigenvalues` (sorted) and `conditionSymmetric`. */
 @Tag("fast")
 class GoldenEigenTest {
 

@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 import kotlin.test.assertEquals
 
-/** Эталон `pure.json`: чистые функции без LAPACK — всё сравнивается побитово. */
+/** Golden reference `pure.json`: pure functions without LAPACK — everything is compared bit for bit. */
 @Tag("fast")
 class GoldenPureTest {
 

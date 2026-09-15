@@ -1,17 +1,16 @@
 package numerics
 
 /**
- * Плотная матрица над плоским массивом в столбцовом порядке (column-major):
- * элемент (i, j) лежит в `data[i + j * rows]`. Такой порядок совпадает с
- * соглашением BLAS/LAPACK и позволяет передавать данные в нативные библиотеки
- * без перекладки.
+ * Dense matrix backed by a flat column-major array: element (i, j) is stored at
+ * `data[i + j * rows]`. This layout matches the BLAS/LAPACK convention and lets
+ * the data be passed to native libraries without repacking.
  *
- * Размеры фиксируются при создании; содержимое изменяемое — [set] пишет прямо
- * в [data]. Экземпляры создаются фабриками из сопутствующего объекта.
+ * The shape is fixed at construction; the contents are mutable — [set] writes
+ * directly into [data]. Instances are created via the companion-object factories.
  *
- * @property rows число строк.
- * @property cols число столбцов.
- * @property data хранилище длиной `rows * cols` в столбцовом порядке.
+ * @property rows number of rows.
+ * @property cols number of columns.
+ * @property data storage of length `rows * cols` in column-major order.
  */
 public class DenseMatrix private constructor(
     public val rows: Int,
@@ -19,33 +18,33 @@ public class DenseMatrix private constructor(
     public val data: DoubleArray,
 ) {
     init {
-        require(rows >= 0 && cols >= 0) { "Размеры матрицы не могут быть отрицательными: $rows x $cols" }
-        require(data.size == rows * cols) { "Длина массива ${data.size} не равна rows*cols = ${rows * cols}" }
+        require(rows >= 0 && cols >= 0) { "Matrix dimensions must be non-negative: $rows x $cols" }
+        require(data.size == rows * cols) { "Array length ${data.size} does not equal rows*cols = ${rows * cols}" }
     }
 
-    /** Истина, если число строк равно числу столбцов. */
+    /** True if the number of rows equals the number of columns. */
     public val isSquare: Boolean get() = rows == cols
 
     private fun checkIndex(i: Int, j: Int) {
-        require(i in 0 until rows && j in 0 until cols) { "Индекс ($i, $j) вне матрицы $rows x $cols" }
+        require(i in 0 until rows && j in 0 until cols) { "Index ($i, $j) is out of bounds for matrix $rows x $cols" }
     }
 
-    /** Возвращает элемент (i, j); бросает [IllegalArgumentException], если индекс вне матрицы. */
+    /** Returns element (i, j); throws [IllegalArgumentException] if the index is out of bounds. */
     public operator fun get(i: Int, j: Int): Double {
         checkIndex(i, j)
         return data[i + j * rows]
     }
 
-    /** Записывает [v] в элемент (i, j); бросает [IllegalArgumentException], если индекс вне матрицы. */
+    /** Stores [v] into element (i, j); throws [IllegalArgumentException] if the index is out of bounds. */
     public operator fun set(i: Int, j: Int, v: Double) {
         checkIndex(i, j)
         data[i + j * rows] = v
     }
 
-    /** Возвращает независимую копию матрицы (массив данных копируется). */
+    /** Returns an independent copy of the matrix (the data array is copied). */
     public fun copy(): DenseMatrix = DenseMatrix(rows, cols, data.copyOf())
 
-    /** Возвращает новую матрицу cols x rows — транспонированную копию. */
+    /** Returns a new cols x rows matrix — a transposed copy. */
     public fun transpose(): DenseMatrix {
         val t = DoubleArray(rows * cols)
         for (j in 0 until cols) {
@@ -55,29 +54,29 @@ public class DenseMatrix private constructor(
         return DenseMatrix(cols, rows, t)
     }
 
-    /** Возвращает копию строки [i] длиной [cols]; бросает [IllegalArgumentException] при недопустимом индексе. */
+    /** Returns a copy of row [i] of length [cols]; throws [IllegalArgumentException] for an invalid index. */
     public fun row(i: Int): DoubleArray {
-        require(i in 0 until rows) { "Индекс строки $i вне матрицы $rows x $cols" }
+        require(i in 0 until rows) { "Row index $i is out of bounds for matrix $rows x $cols" }
         return DoubleArray(cols) { j -> data[i + j * rows] }
     }
 
-    /** Возвращает копию столбца [j] длиной [rows]; бросает [IllegalArgumentException] при недопустимом индексе. */
+    /** Returns a copy of column [j] of length [rows]; throws [IllegalArgumentException] for an invalid index. */
     public fun column(j: Int): DoubleArray {
-        require(j in 0 until cols) { "Индекс столбца $j вне матрицы $rows x $cols" }
+        require(j in 0 until cols) { "Column index $j is out of bounds for matrix $rows x $cols" }
         return data.copyOfRange(j * rows, (j + 1) * rows)
     }
 
-    /** Возвращает копию матрицы в строковом формате: массив из [rows] строк длиной [cols]. */
+    /** Returns a row-major copy of the matrix: an array of [rows] rows, each of length [cols]. */
     public fun toRows(): Array<DoubleArray> = Array(rows) { i -> DoubleArray(cols) { j -> data[i + j * rows] } }
 
-    /** Матрицы равны, если совпадают размеры и все элементы (побитово, как [DoubleArray.contentEquals]). */
+    /** Matrices are equal if their shapes and all elements match (bitwise, as in [DoubleArray.contentEquals]). */
     override fun equals(other: Any?): Boolean =
         other is DenseMatrix && rows == other.rows && cols == other.cols && data.contentEquals(other.data)
 
-    /** Хеш-код, согласованный с [equals]: по размерам и содержимому. */
+    /** Hash code consistent with [equals]: based on shape and contents. */
     override fun hashCode(): Int = 31 * (31 * rows + cols) + data.contentHashCode()
 
-    /** Размеры и не более чем 6 x 6 верхних левых элементов; усечение обозначается многоточием. */
+    /** Shape and at most the top-left 6 x 6 elements; truncation is marked with an ellipsis. */
     override fun toString(): String {
         val sb = StringBuilder("DenseMatrix($rows x $cols)")
         val r = minOf(rows, PREVIEW)
@@ -94,17 +93,17 @@ public class DenseMatrix private constructor(
         return sb.toString()
     }
 
-    /** Фабрики матриц: нулевая, единичная, диагональная, из строк, из столбцового массива, по функции. */
+    /** Matrix factories: zero, identity, diagonal, from rows, from a column-major array, from a function. */
     public companion object {
         private const val PREVIEW = 6
 
-        /** Создаёт нулевую матрицу rows x cols; бросает [IllegalArgumentException] при отрицательных размерах. */
+        /** Creates a zero matrix rows x cols; throws [IllegalArgumentException] for negative dimensions. */
         public fun zeros(rows: Int, cols: Int): DenseMatrix {
-            require(rows >= 0 && cols >= 0) { "Размеры матрицы не могут быть отрицательными: $rows x $cols" }
+            require(rows >= 0 && cols >= 0) { "Matrix dimensions must be non-negative: $rows x $cols" }
             return DenseMatrix(rows, cols, DoubleArray(rows * cols))
         }
 
-        /** Создаёт единичную матрицу n x n. */
+        /** Creates the n x n identity matrix. */
         public fun identity(n: Int): DenseMatrix {
             val m = zeros(n, n)
             for (i in 0 until n) m.data[i + i * n] = 1.0
@@ -112,15 +111,15 @@ public class DenseMatrix private constructor(
         }
 
         /**
-         * Строит матрицу из массива строк, копируя данные. Пустой массив даёт матрицу 0 x 0.
-         * Бросает [IllegalArgumentException], если строки имеют разную длину.
+         * Builds a matrix from an array of rows, copying the data. An empty array yields a 0 x 0 matrix.
+         * Throws [IllegalArgumentException] if the rows have different lengths.
          */
         public fun fromRows(rows: Array<DoubleArray>): DenseMatrix {
             if (rows.isEmpty()) return DenseMatrix(0, 0, DoubleArray(0))
             val n = rows.size
             val cols = rows[0].size
             for (i in rows.indices) {
-                require(rows[i].size == cols) { "Строка $i имеет длину ${rows[i].size}, ожидалось $cols" }
+                require(rows[i].size == cols) { "Row $i has length ${rows[i].size}, expected $cols" }
             }
             val data = DoubleArray(n * cols)
             for (i in 0 until n) {
@@ -131,13 +130,13 @@ public class DenseMatrix private constructor(
         }
 
         /**
-         * Оборачивает готовый массив в столбцовом порядке без копирования: матрица владеет
-         * переданным массивом, и все последующие изменения массива видны через неё (и наоборот).
-         * Бросает [IllegalArgumentException], если размеры отрицательны или длина массива не равна `rows * cols`.
+         * Wraps an existing column-major array without copying: the matrix takes ownership of
+         * the array, and any later changes to the array are visible through the matrix (and vice versa).
+         * Throws [IllegalArgumentException] if the dimensions are negative or the array length is not `rows * cols`.
          */
         public fun fromColumnMajor(rows: Int, cols: Int, data: DoubleArray): DenseMatrix = DenseMatrix(rows, cols, data)
 
-        /** Строит матрицу rows x cols, вычисляя каждый элемент (i, j) функцией [cell]. */
+        /** Builds a rows x cols matrix, computing each element (i, j) with [cell]. */
         public fun build(rows: Int, cols: Int, cell: (Int, Int) -> Double): DenseMatrix {
             val m = zeros(rows, cols)
             val data = m.data
@@ -148,7 +147,7 @@ public class DenseMatrix private constructor(
             return m
         }
 
-        /** Создаёт диагональную матрицу n x n с элементами [d] на диагонали, где n — длина [d]. */
+        /** Creates an n x n diagonal matrix with [d] on the diagonal, where n is the length of [d]. */
         public fun diagonal(d: DoubleArray): DenseMatrix {
             val n = d.size
             val m = zeros(n, n)

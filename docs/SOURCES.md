@@ -1,56 +1,56 @@
-# Источники численных методов
+# Sources of the numerical methods
 
-В документе зафиксировано происхождение каждого алгоритма библиотеки. Применяемые методы
-являются классическими; ссылки даны на издания, по которым сверялись формулы, и на
-документацию LAPACK для процедур, вызываемых через netlib.
+This document records the provenance of every algorithm in the library. The methods used are
+classical; references point to the editions against which the formulas were checked and to
+the LAPACK documentation for the routines called through netlib.
 
-## Условные обозначения статуса
+## Status legend
 
-- **Классика** — метод описан в учебной литературе или документации LAPACK; реализация
-  сверена с формулами источника и тестами.
-- **Собственная разработка** — инженерное решение библиотеки без внешнего источника;
-  обоснование приведено в KDoc указанного элемента и в `docs/ТОЧНОСТЬ.md`.
+- **Classical** — the method is described in textbooks or in the LAPACK documentation; the
+  implementation is checked against the formulas of the source and by tests.
+- **Original work** — an engineering decision of the library without an external source; the
+  justification is given in the KDoc of the referenced element and in `docs/ACCURACY.md`.
 
-## 1. Квадратура
+## 1. Quadrature
 
-| Элемент | Реализация | Источник | Статус |
+| Element | Implementation | Source | Status |
 |---|---|---|---|
-| Узлы и веса Гаусса–Лежандра на `[-1, 1]`: нули многочлена Лежандра `P_m` методом Ньютона от начального приближения `cos(π (i + 3/4)/(m + 1/2))`, веса `2 / ((1 − x²) P_m'(x)²)` | `GaussLegendre.gaussLegendreReference` | [Davis, Rabinowitz 1984], гл. 2; [Stoer, Bulirsch 2002], §3.6 | Классика |
-| Составная квадратура по разбиению отрезка с аффинным переносом узлов на каждый подынтервал | `GaussLegendre.integrate`, `integrateInterval` | [Davis, Rabinowitz 1984], гл. 2 | Классика |
-| Точность на многочленах степени `2m − 1` | проверяется тестами квадратуры | [Stoer, Bulirsch 2002], теорема 3.6.12 | Классика |
+| Gauss–Legendre nodes and weights on `[-1, 1]`: zeros of the Legendre polynomial `P_m` by Newton's method from the initial guess `cos(π (i + 3/4)/(m + 1/2))`, weights `2 / ((1 − x²) P_m'(x)²)` | `GaussLegendre.gaussLegendreReference` | [Davis, Rabinowitz 1984], ch. 2; [Stoer, Bulirsch 2002], §3.6 | Classical |
+| Composite quadrature over a partition of the interval with affine mapping of the nodes onto each subinterval | `GaussLegendre.integrate`, `integrateInterval` | [Davis, Rabinowitz 1984], ch. 2 | Classical |
+| Exactness on polynomials of degree `2m − 1` | verified by the quadrature tests | [Stoer, Bulirsch 2002], Theorem 3.6.12 | Classical |
 
-## 2. Плотная линейная алгебра
+## 2. Dense linear algebra
 
-| Элемент | Реализация | Источник | Статус |
+| Element | Implementation | Source | Status |
 |---|---|---|---|
-| Решение системы линейных алгебраических уравнений (СЛАУ) LU-разложением с частичным выбором ведущего элемента | `LinearAlgebra.solve` → LAPACK `dgesv`, `dgetrf`, `dgetrs` | [Anderson et al. 1999]; [Golub, Van Loan 2013], §3.4 | Классика |
-| Разложение Холецкого и проверка положительной определённости | `LinearAlgebra.cholesky` → LAPACK `dpotrf` | [Anderson et al. 1999]; [Golub, Van Loan 2013], §4.2 | Классика |
-| Умножения матрица–вектор, матрица–матрица, `AᵀWA`, `axpy` | `LinearAlgebra.matVec`, `matTransVec`, `matMat`, `atWa`, `addScaled` → BLAS `dgemv`, `dgemm`, `daxpy` | [Anderson et al. 1999], приложение о BLAS | Классика |
-| Матричные нормы `‖·‖₁`, `‖·‖∞`, норма Фробениуса, максимум модуля элементов | `LinAlgBackend.norm` → LAPACK `dlange` | [Anderson et al. 1999] | Классика |
-| Проверка решения по обратной ошибке `‖Ax − b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)` и порог `1e-10` | `LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE` | обратная устойчивость LU-разложения: [Higham 2002], гл. 9; обоснование порога — `docs/ТОЧНОСТЬ.md` | Собственная разработка |
-| Независимая реализация LU-разложения в тестах в качестве второго оракула | `core/src/test` | [Golub, Van Loan 2013], §3.4 | Классика |
+| Solution of a system of linear algebraic equations by LU factorization with partial pivoting | `LinearAlgebra.solve` → LAPACK `dgesv`, `dgetrf`, `dgetrs` | [Anderson et al. 1999]; [Golub, Van Loan 2013], §3.4 | Classical |
+| Cholesky factorization and positive definiteness check | `LinearAlgebra.cholesky` → LAPACK `dpotrf` | [Anderson et al. 1999]; [Golub, Van Loan 2013], §4.2 | Classical |
+| Matrix–vector and matrix–matrix products, `AᵀWA`, `axpy` | `LinearAlgebra.matVec`, `matTransVec`, `matMat`, `atWa`, `addScaled` → BLAS `dgemv`, `dgemm`, `daxpy` | [Anderson et al. 1999], BLAS appendix | Classical |
+| Matrix norms `‖·‖₁`, `‖·‖∞`, Frobenius norm, maximum absolute element | `LinAlgBackend.norm` → LAPACK `dlange` | [Anderson et al. 1999] | Classical |
+| Solution check by the backward error `‖Ax − b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)` and the `1e-10` threshold | `LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE` | backward stability of LU factorization: [Higham 2002], ch. 9; justification of the threshold — `docs/ACCURACY.md` | Original work |
+| Independent LU factorization implementation in the tests as a second oracle | `core/src/test` | [Golub, Van Loan 2013], §3.4 | Classical |
 
-## 3. Обусловленность и оценка ошибки
+## 3. Conditioning and error estimation
 
-| Элемент | Реализация | Источник | Статус |
+| Element | Implementation | Source | Status |
 |---|---|---|---|
-| Обратная ошибка `ω` и граница прямой ошибки `‖x − x*‖/‖x*‖ ≤ cond∞(A) · ω` | `Conditioning.relativeBackwardError`, `Conditioning.forwardError` | [Higham 2002], гл. 7 (нормовая обратная ошибка Ригала–Гаше) | Классика |
-| `cond∞(A) = ‖A‖∞ ‖A⁻¹‖∞` через явное обращение; невязка `‖A A⁻¹ − I‖∞` как признак достоверности | `Conditioning.conditionInf`, `inverse`, `inversionResidual` → LAPACK `dgetrf` + `dgetrs` с единичной матрицей в правой части | [Golub, Van Loan 2013], §2.6; критерий достоверности — `ConditionEstimate` | Классика / собственная разработка |
-| Оценка числа обусловленности в норме-1 по LU-разложению | `Conditioning.conditionEstimate` → LAPACK `dgecon` | [Anderson et al. 1999]; [Higham 2002], гл. 15 (алгоритм Хагера–Хайема) | Классика |
-| Собственные значения симметричной матрицы; спектральное число обусловленности | `Conditioning.symmetricEigenvalues`, `conditionSymmetric` → LAPACK `dsyev` | [Anderson et al. 1999]; [Golub, Van Loan 2013], гл. 8 | Классика |
-| Закрытый тип `ForwardError` с вариантами `Bounded` / `NoFiniteBound` / `Unreliable` | `numerics.ForwardError` | — | Собственная разработка: недостоверная оценка не возвращается как число |
+| Backward error `ω` and forward error bound `‖x − x*‖/‖x*‖ ≤ cond∞(A) · ω` | `Conditioning.relativeBackwardError`, `Conditioning.forwardError` | [Higham 2002], ch. 7 (normwise backward error of Rigal–Gaches) | Classical |
+| `cond∞(A) = ‖A‖∞ ‖A⁻¹‖∞` via explicit inversion; residual `‖A A⁻¹ − I‖∞` as the reliability indicator | `Conditioning.conditionInf`, `inverse`, `inversionResidual` → LAPACK `dgetrf` + `dgetrs` with the identity matrix as the right-hand side | [Golub, Van Loan 2013], §2.6; reliability criterion — `ConditionEstimate` | Classical / original work |
+| Condition number estimate in the 1-norm from the LU factorization | `Conditioning.conditionEstimate` → LAPACK `dgecon` | [Anderson et al. 1999]; [Higham 2002], ch. 15 (Hager–Higham algorithm) | Classical |
+| Eigenvalues of a symmetric matrix; spectral condition number | `Conditioning.symmetricEigenvalues`, `conditionSymmetric` → LAPACK `dsyev` | [Anderson et al. 1999]; [Golub, Van Loan 2013], ch. 8 | Classical |
+| Sealed type `ForwardError` with variants `Bounded` / `NoFiniteBound` / `Unreliable` | `numerics.ForwardError` | — | Original work: an unreliable estimate is never returned as a number |
 
-## 4. Инфраструктура
+## 4. Infrastructure
 
-| Элемент | Реализация | Источник | Статус |
+| Element | Implementation | Source | Status |
 |---|---|---|---|
-| Порог шума `1e-13` и тип `Measured` | `numerics.Measured`, `measured` | обоснование в `docs/ТОЧНОСТЬ.md` | Собственная разработка |
-| Наблюдаемый порядок сходимости `log₂(E_h / E_{h/2})` и константа `E_h / h^p` | `orders`, `constCh`, `reliableOrders`, `reliableConstCh` | стандартное определение наблюдаемого порядка | Классика |
-| Параллельная сборка матриц по строкам через общий пул потоков | `ParallelAssembly` | — | Собственная разработка |
-| Единый интерфейс реализаций BLAS/LAPACK с автоматическим выбором и явной диагностикой | `numerics.backend.LinAlgBackend`, `Backends`, `NetlibBackend` | доступ через netlib | Собственная разработка |
-| Упакованная реализация OpenBLAS | модуль `numerical-core-openblas`, `OpenBlas.install()` | OpenBLAS; JavaCPP Presets | Классика |
+| Noise threshold `1e-13` and the `Measured` type | `numerics.Measured`, `measured` | justification in `docs/ACCURACY.md` | Original work |
+| Observed convergence order `log₂(E_h / E_{h/2})` and constant `E_h / h^p` | `orders`, `constCh`, `reliableOrders`, `reliableConstCh` | standard definition of the observed order | Classical |
+| Parallel row-wise matrix assembly on the common thread pool | `ParallelAssembly` | — | Original work |
+| Unified interface to BLAS/LAPACK implementations with automatic selection and explicit diagnostics | `numerics.backend.LinAlgBackend`, `Backends`, `NetlibBackend` | access through netlib | Original work |
+| Bundled OpenBLAS implementation | module `numerical-core-openblas`, `OpenBlas.install()` | OpenBLAS; JavaCPP Presets | Classical |
 
-## Список литературы
+## References
 
 1. **[Davis, Rabinowitz 1984]** Davis P. J., Rabinowitz P. Methods of Numerical
    Integration. — 2nd ed. — Orlando: Academic Press, 1984.
@@ -63,8 +63,8 @@
 5. **[Anderson et al. 1999]** Anderson E., Bai Z., Bischof C., Blackford S., Demmel J.,
    Dongarra J., Du Croz J., Greenbaum A., Hammarling S., McKenney A., Sorensen D.
    LAPACK Users' Guide. — 3rd ed. — Philadelphia: SIAM, 1999.
-6. **netlib** — `dev.ludovic.netlib` 3.2.0, слой доступа к BLAS/LAPACK из JVM с переносимой
-   реализацией F2J. Лицензия MIT. <https://github.com/luhenry/netlib>.
-7. **OpenBLAS** — оптимизированная реализация BLAS/LAPACK. Лицензия BSD-3-Clause.
-   <https://github.com/OpenMathLib/OpenBLAS>. Поставляется через JavaCPP Presets
-   (`org.bytedeco:openblas`, лицензия Apache-2.0 / GPLv2 с classpath exception).
+6. **netlib** — `dev.ludovic.netlib` 3.2.0, a JVM access layer to BLAS/LAPACK with a portable
+   F2J implementation. MIT License. <https://github.com/luhenry/netlib>.
+7. **OpenBLAS** — an optimized BLAS/LAPACK implementation. BSD-3-Clause License.
+   <https://github.com/OpenMathLib/OpenBLAS>. Shipped via JavaCPP Presets
+   (`org.bytedeco:openblas`, Apache-2.0 / GPLv2 with classpath exception license).

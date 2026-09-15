@@ -1,12 +1,12 @@
-# Базовая линия производительности numerical-core 0.1.0
+# Performance baseline of numerical-core 0.1.0
 
-Микробенчмарк публичного API (`LinearAlgebra.solve/matMat/matVec/matTransVec/atWa`,
-`Conditioning.conditionInf/symmetricEigenvalues`) на версии 0.1.0 до переработки; входы детерминированы
-(`java.util.Random(1000 + n)`, диагонально доминирующие матрицы). Машина: Apple M1 Pro, 8 ядер, macOS, JDK 21,
-бэкенд по умолчанию (multik 0.2.3 / OpenBLAS). Повторить: `./gradlew :numerical-core:benchmark -Pbench.args="256 512 1024 2048"`
-(исходник — `src/benchmark/kotlin/numerics/bench/Bench.kt`, source-set `benchmark`, в артефакт не входит).
+Microbenchmark of the public API (`LinearAlgebra.solve/matMat/matVec/matTransVec/atWa`,
+`Conditioning.conditionInf/symmetricEigenvalues`) on version 0.1.0 before the rework; the inputs are deterministic
+(`java.util.Random(1000 + n)`, diagonally dominant matrices). Machine: Apple M1 Pro, 8 cores, macOS, JDK 21,
+default backend (multik 0.2.3 / OpenBLAS). To reproduce: `./gradlew :numerical-core:benchmark -Pbench.args="256 512 1024 2048"`
+(source: `src/benchmark/kotlin/numerics/bench/Bench.kt`, source set `benchmark`, not part of the artifact).
 
-## Результат
+## Result
 
 ```
 backend: multik-cpu (OpenBLAS)
@@ -15,8 +15,8 @@ jvm: 21.0.10
 os.arch: aarch64
 date: 2026-09-08T23:49:45.432893+03:00
 
-Время в мс: медиана из 5 замеров после 3 прогревов (conditionInf и symmetricEigenvalues — медиана из 3).
-conditionInf измеряется только при n ≤ 512, symmetricEigenvalues — при n ≤ 256; иначе «—» (слишком долго).
+Time in ms: median of 5 measurements after 3 warm-ups (conditionInf and symmetricEigenvalues — median of 3).
+conditionInf is measured only for n ≤ 512, symmetricEigenvalues only for n ≤ 256; otherwise "—" (too slow).
 
 | n | solve | matMat | matVec | matTransVec | atWa | conditionInf | symmetricEigenvalues |
 |---:|---:|---:|---:|---:|---:|---:|---:|

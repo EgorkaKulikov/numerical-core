@@ -3,59 +3,59 @@ package numerics
 import kotlin.math.abs
 
 /**
- * Единая проверка форм входных данных для [LinearAlgebra] и [Conditioning].
- * Каждая проверка завершается [IllegalArgumentException] с русским сообщением,
- * в котором названы фактические размеры.
+ * Shared shape validation of inputs for [LinearAlgebra] and [Conditioning].
+ * Every check fails with an [IllegalArgumentException] whose message
+ * names the actual dimensions.
  */
 internal object Shapes {
 
-    /** Матрица должна иметь хотя бы одну строку и один столбец. */
-    fun requireNonEmpty(a: DenseMatrix, what: String = "матрица") {
-        require(a.rows > 0 && a.cols > 0) { "$what не должна быть пустой, получено ${a.rows}×${a.cols}" }
+    /** The matrix must have at least one row and one column. */
+    fun requireNonEmpty(a: DenseMatrix, what: String = "matrix") {
+        require(a.rows > 0 && a.cols > 0) { "$what must not be empty, got ${a.rows}×${a.cols}" }
     }
 
-    /** Матрица должна быть непустой и квадратной. */
-    fun requireSquare(a: DenseMatrix, what: String = "матрица") {
+    /** The matrix must be non-empty and square. */
+    fun requireSquare(a: DenseMatrix, what: String = "matrix") {
         requireNonEmpty(a, what)
-        require(a.isSquare) { "$what должна быть квадратной, получено ${a.rows}×${a.cols}" }
+        require(a.isSquare) { "$what must be square, got ${a.rows}×${a.cols}" }
     }
 
-    /** Длина вектора должна равняться [n]. */
+    /** The vector length must equal [n]. */
     fun requireVectorLength(v: DoubleArray, n: Int, what: String) {
-        require(v.size == n) { "длина вектора $what должна быть $n, получено ${v.size}" }
+        require(v.size == n) { "length of vector $what must be $n, got ${v.size}" }
     }
 
-    /** Обе матрицы непусты, число столбцов левой равно числу строк правой. */
+    /** Both matrices are non-empty and the column count of the left one equals the row count of the right one. */
     fun requireMultiplicable(a: DenseMatrix, b: DenseMatrix) {
-        requireNonEmpty(a, "левая матрица")
-        requireNonEmpty(b, "правая матрица")
+        requireNonEmpty(a, "left matrix")
+        requireNonEmpty(b, "right matrix")
         require(a.cols == b.rows) {
-            "размеры не согласованы для умножения: ${a.rows}×${a.cols} и ${b.rows}×${b.cols}"
+            "dimensions are incompatible for multiplication: ${a.rows}×${a.cols} and ${b.rows}×${b.cols}"
         }
     }
 
-    /** Размеры двух матриц совпадают. */
+    /** The two matrices have the same shape. */
     fun requireSameShape(a: DenseMatrix, b: DenseMatrix) {
         require(a.rows == b.rows && a.cols == b.cols) {
-            "размеры матриц должны совпадать, получено ${a.rows}×${a.cols} и ${b.rows}×${b.cols}"
+            "matrix dimensions must match, got ${a.rows}×${a.cols} and ${b.rows}×${b.cols}"
         }
     }
 
-    /** Все элементы матрицы — конечные числа. */
+    /** All matrix entries are finite numbers. */
     fun requireFinite(a: DenseMatrix, what: String) {
-        require(a.data.all { it.isFinite() }) { "$what содержит нечисловые значения (NaN или бесконечность)" }
+        require(a.data.all { it.isFinite() }) { "$what contains non-finite values (NaN or infinity)" }
     }
 
-    /** Все компоненты вектора — конечные числа. */
+    /** All vector components are finite numbers. */
     fun requireFinite(v: DoubleArray, what: String) {
-        require(v.all { it.isFinite() }) { "$what содержит нечисловые значения (NaN или бесконечность)" }
+        require(v.all { it.isFinite() }) { "$what contains non-finite values (NaN or infinity)" }
     }
 
     /**
-     * Квадратная матрица симметрична с точностью до округления:
-     * `max|A − Aᵀ| ≤ 1e-12 · ‖A‖∞`; норму [normInf] передаёт вызывающий.
+     * The square matrix is symmetric up to rounding:
+     * `max|A − Aᵀ| ≤ 1e-12 · ‖A‖∞`; the norm [normInf] is supplied by the caller.
      */
-    fun requireSymmetric(a: DenseMatrix, normInf: Double, what: String = "матрица") {
+    fun requireSymmetric(a: DenseMatrix, normInf: Double, what: String = "matrix") {
         requireSquare(a, what)
         val n = a.rows
         val d = a.data
@@ -64,7 +64,7 @@ internal object Shapes {
             asym = maxOf(asym, abs(d[i + j * n] - d[j + i * n]))
         }
         require(asym <= 1e-12 * maxOf(normInf, Double.MIN_VALUE)) {
-            "$what должна быть симметричной: max|A−Aᵀ| = $asym"
+            "$what must be symmetric: max|A−Aᵀ| = $asym"
         }
     }
 }

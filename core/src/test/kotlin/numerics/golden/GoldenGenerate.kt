@@ -25,9 +25,9 @@ import java.io.File
 import java.time.Instant
 
 /**
- * Генератор golden-эталонов поведения версии 0.1.0. Не входит в обычный прогон
- * (`excludeTags("golden-generate")`); запускается задачей `./gradlew regenerateGolden`,
- * которая передаёт каталог назначения через `-Dgolden.dir`.
+ * Generator of the golden references capturing the behaviour of version 0.1.0. Excluded from the
+ * regular test run (`excludeTags("golden-generate")`); launched by the `./gradlew regenerateGolden`
+ * task, which passes the destination directory via `-Dgolden.dir`.
  */
 @Tag("golden-generate")
 class GoldenGenerate {
@@ -35,7 +35,7 @@ class GoldenGenerate {
     private val dir: File
         get() = File(
             System.getProperty("golden.dir")
-                ?: error("Не задано системное свойство golden.dir; используйте ./gradlew regenerateGolden"),
+                ?: error("System property golden.dir is not set; use ./gradlew regenerateGolden"),
         )
 
     private fun meta(): Map<String, Any?> = linkedMapOf(
@@ -94,7 +94,7 @@ class GoldenGenerate {
     fun cholesky() {
         val cases = LinkedHashMap<String, Any?>()
         for (case in GoldenInputs.choleskyCases) {
-            val l = LinearAlgebra.cholesky(case.matrix()) ?: error("cholesky(${case.key}) вернул null")
+            val l = LinearAlgebra.cholesky(case.matrix()) ?: error("cholesky(${case.key}) returned null")
             cases[case.key] = linkedMapOf("L" to mat(l))
         }
         GoldenIo.writeGolden(dir, "cholesky.json", root("cases" to cases))

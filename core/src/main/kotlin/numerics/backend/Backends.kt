@@ -8,30 +8,30 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
- * Выбор реализации линейной алгебры.
+ * Selection of the linear algebra backend.
  *
- * Доступны две реализации [NetlibBackend]: [native] — системная BLAS/LAPACK через JNI
- * (Accelerate, OpenBLAS, MKL) и [java] — переносимая реализация на Java, которая
- * есть всегда. Реализация по умолчанию [default] выбирается один раз на процесс по
- * системному свойству `numerics.backend`:
- *  - `native` — только системная библиотека; если она не загрузилась, обращение
- *    к [default] бросает [IllegalStateException];
- *  - `java` — только реализация на Java;
- *  - `auto` (или свойство не задано) — системная библиотека при доступности, иначе
- *    Java с однократным предупреждением в журнал `numerics`.
+ * Two [NetlibBackend] flavours are available: [native] — the system BLAS/LAPACK via JNI
+ * (Accelerate, OpenBLAS, MKL) and [java] — a portable pure-Java implementation that is
+ * always present. The default backend [default] is chosen once per process from the
+ * system property `numerics.backend`:
+ *  - `native` — the system library only; if it failed to load, calling [default]
+ *    throws [IllegalStateException];
+ *  - `java` — the Java implementation only;
+ *  - `auto` (or property not set) — the system library when available, otherwise
+ *    Java with a one-time warning to the `numerics` logger.
  *
- * Выбор по умолчанию нельзя подменить после старта: кому нужна другая реализация,
- * передаёт её явно параметром [numerics.LinearAlgebra] или полем
- * [numerics.NumericsContext].
+ * The default cannot be replaced after startup: code that needs a different backend
+ * passes it explicitly as a [numerics.LinearAlgebra] parameter or via a
+ * [numerics.NumericsContext] field.
  */
 public object Backends {
 
     private const val PROPERTY = "numerics.backend"
 
     /**
-     * Ленивый стартовый выбор. `lazy` не запоминает исключение инициализатора, поэтому
-     * при недоступной запрошенной реализации каждое обращение снова бросает исходное
-     * исключение с исходным сообщением, а не `NoClassDefFoundError` без причины.
+     * Lazy startup selection. `lazy` does not cache the initializer's exception, so when
+     * the requested backend is unavailable every access rethrows the original exception
+     * with its original message rather than a `NoClassDefFoundError` without a cause.
      */
     private val startup: Lazy<LinAlgBackend> = lazy { resolve(System.getProperty(PROPERTY)) }
 
@@ -45,7 +45,7 @@ public object Backends {
         try {
             NetlibBackend(NativeBLAS.getInstance(), NativeLAPACK.getInstance())
         } catch (e: RuntimeException) {
-            throw IllegalStateException("Нативная реализация BLAS/LAPACK недоступна: ${e.message}", e)
+            throw IllegalStateException("Native BLAS/LAPACK implementation is unavailable: ${e.message}", e)
         }
     }
 
@@ -59,36 +59,36 @@ public object Backends {
     }
 
     /**
-     * Реализация по умолчанию, выбранная при первом обращении по свойству `numerics.backend`.
-     * Обращение дёшево, поэтому безопасно как значение параметра по умолчанию.
-     * @throws IllegalStateException если запрошена недоступная реализация.
-     * @throws IllegalArgumentException если значение свойства не из числа допустимых.
+     * The default backend, chosen on first access from the `numerics.backend` property.
+     * Access is cheap, so it is safe to use as a default parameter value.
+     * @throws IllegalStateException if the requested backend is unavailable.
+     * @throws IllegalArgumentException if the property value is not one of the allowed ones.
      */
     public fun default(): LinAlgBackend = startup.value
 
     /**
-     * Системная BLAS/LAPACK через JNI.
-     * @throws IllegalStateException если нативная библиотека не загрузилась.
+     * The system BLAS/LAPACK via JNI.
+     * @throws IllegalStateException if the native library failed to load.
      */
     public fun native(): LinAlgBackend = nativeInstance.value
 
-    /** Переносимая реализация на Java; доступна всегда. */
+    /** Portable Java implementation; always available. */
     public fun java(): LinAlgBackend = javaInstance.value
 
-    /** Истина, если системная библиотека загрузилась; результат вычисляется один раз. */
+    /** True if the system library has loaded; the result is computed once. */
     public fun isNativeAvailable(): Boolean = nativeAvailable.value
 
-    /** Реально доступные реализации: системная (если загрузилась) и Java. */
+    /** Backends actually available: the system one (if loaded) and Java. */
     public fun available(): List<LinAlgBackend> =
         if (isNativeAvailable()) listOf(native(), java()) else listOf(java())
 
-    /** Имя реализации по умолчанию и режим, заданный свойством. */
+    /** Name of the default backend and the mode set by the property. */
     public fun describe(): String =
         "backend=${default().name}, ${PROPERTY}=${System.getProperty(PROPERTY) ?: "auto"}"
 
     /**
-     * Разбор значения свойства `numerics.backend` в реализацию; вынесен отдельно, чтобы
-     * проверять логику выбора, не трогая стартовое значение [default].
+     * Parses the `numerics.backend` property value into a backend; kept separate so the
+     * selection logic can be tested without touching the startup value of [default].
      */
     internal fun resolve(mode: String?): LinAlgBackend =
         when (val m = mode?.trim()?.lowercase()) {
@@ -99,20 +99,20 @@ public object Backends {
             "native" -> native()
             "java" -> java()
             else -> throw IllegalArgumentException(
-                "$PROPERTY='$m': недопустимое значение; допустимые — native, java, auto"
+                "$PROPERTY='$m': invalid value; allowed values are native, java, auto"
             )
         }
 
     private val warned: Lazy<Unit> = lazy {
         System.getLogger("numerics").log(
             System.Logger.Level.WARNING,
-            "Нативная BLAS/LAPACK не найдена, используется реализация на Java; производительность ниже",
+            "Native BLAS/LAPACK not found, falling back to the Java implementation; performance will be lower",
         )
     }
 
     private fun warnOnce() = warned.value
 
-    /** Гасит информационные сообщения netlib о выбранной реализации (пишутся в stderr). */
+    /** Silences netlib's informational messages about the chosen implementation (written to stderr). */
     private fun quietNetlibLogging() {
         for (name in listOf(
             "dev.ludovic.netlib",

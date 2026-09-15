@@ -10,11 +10,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Проверка, что параллельная сборка матриц совпадает с последовательной.
+ * Checks that parallel matrix assembly matches the sequential one.
  *
- * Параллельная сборка по независимым строкам обязана давать побитово тот же
- * результат, что и последовательное заполнение: используется крупный размер
- * (200x200), чтобы реально задействовать пул потоков ForkJoin.
+ * Parallel assembly over independent rows must produce bit-for-bit the same
+ * result as sequential filling: a large size (200x200) is used
+ * so that the ForkJoin thread pool is actually engaged.
  */
 @Tag("fast")
 class ParallelAssemblyTest {
@@ -31,7 +31,7 @@ class ParallelAssemblyTest {
     private fun sequential(rows: Int, cols: Int): Array<DoubleArray> =
         Array(rows) { i -> DoubleArray(cols) { j -> cell(i, j, cols) } }
 
-    /** Один DynamicTest на форму матрицы. */
+    /** One DynamicTest per matrix shape. */
     private fun perSize(body: (rows: Int, cols: Int) -> Unit): List<DynamicTest> =
         sizes.map { sz -> DynamicTest.dynamicTest("${sz[0]}×${sz[1]}") { body(sz[0], sz[1]) } }
 
@@ -45,7 +45,7 @@ class ParallelAssemblyTest {
         }
     }
 
-    /** assembleMatrix равен последовательному заполнению на всех размерах. */
+    /** assembleMatrix equals sequential filling for all sizes. */
     @TestFactory
     fun assembleMatrixEqualsSequential(): List<DynamicTest> = perSize { rows, cols ->
         val expected = sequential(rows, cols)
@@ -53,7 +53,7 @@ class ParallelAssemblyTest {
         assertEq(expected, actual)
     }
 
-    /** assembleRows равен последовательному заполнению на всех размерах. */
+    /** assembleRows equals sequential filling for all sizes. */
     @TestFactory
     fun assembleRowsEqualsSequential(): List<DynamicTest> = perSize { rows, cols ->
         val expected = sequential(rows, cols)
@@ -64,22 +64,22 @@ class ParallelAssemblyTest {
     }
 
     /**
-     * assembleRows отбраковывает строку неверной длины — иначе собралась бы рваная
-     * «матрица», и ошибка всплыла бы позже в линейной алгебре. Проверяем оба режима:
-     * в параллельном IntStream прокидывает исключение задачи вызывающему потоку как есть.
+     * assembleRows rejects a row of the wrong length — otherwise a ragged "matrix"
+     * would be assembled and the error would surface later in linear algebra. Both modes are checked:
+     * in parallel mode IntStream rethrows the task exception to the calling thread as is.
      */
     @TestFactory
     fun assembleRowsRejectsRaggedRow(): List<DynamicTest> = listOf(false, true).map { parallel ->
         DynamicTest.dynamicTest("parallel=$parallel") {
             val e = assertFailsWith<IllegalArgumentException>("parallel=$parallel") {
-                // строка 3 на один элемент короче обявленного cols
+                // row 3 is one element shorter than the declared cols
                 ParallelAssembly.assembleRows(8, 5, parallel) { i ->
                     DoubleArray(if (i == 3) 4 else 5) { j -> cell(i, j, 5) }
                 }
             }
             assertTrue(
                 e.message!!.contains("assembleRows"),
-                "parallel=$parallel: ожидалось сообщение assembleRows, получено ${e.message}",
+                "parallel=$parallel: expected an assembleRows message, got ${e.message}",
             )
         }
     }

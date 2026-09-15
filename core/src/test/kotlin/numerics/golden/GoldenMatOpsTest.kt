@@ -13,7 +13,7 @@ import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 
-/** Эталон `matops.json`: матрично-векторные операции и нормы. */
+/** Golden reference `matops.json`: matrix-vector operations and norms. */
 @Tag("fast")
 class GoldenMatOpsTest {
 

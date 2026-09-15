@@ -24,7 +24,7 @@ java {
 
 tasks.test {
     useJUnitPlatform()
-    // Многопоточное LU-разложение в OpenBLAS требует стека больше стандартного (см. README модуля).
+    // Multithreaded LU factorization in OpenBLAS needs a larger stack than the default (see the module README).
     jvmArgs("-Xss8m")
 }
 
@@ -36,8 +36,8 @@ publishing {
             pom {
                 name.set("numerical-core-openblas")
                 description.set(
-                    "Упакованная реализация BLAS/LAPACK (OpenBLAS) для numerical-core: " +
-                        "используется там, где системной библиотеки нет"
+                    "Bundled BLAS/LAPACK implementation (OpenBLAS) for numerical-core: " +
+                        "used where no system library is available"
                 )
                 url.set("https://github.com/EgorkaKulikov/numerical-core")
                 inceptionYear.set("2026")

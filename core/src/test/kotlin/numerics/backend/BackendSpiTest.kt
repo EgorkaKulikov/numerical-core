@@ -16,9 +16,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Контракт [LinAlgBackend]/[Backends]: доступность реализаций, выбор по свойству
- * `numerics.backend`, согласие нативной и Java-реализаций, передача вычисления из единой
- * точки входа явно переданной реализации и единая семантика вырожденности.
+ * Contract of [LinAlgBackend]/[Backends]: implementation availability, selection via the
+ * `numerics.backend` property, agreement between the native and Java implementations, delegation
+ * from the single entry point to an explicitly passed implementation, and uniform singularity semantics.
  */
 @Tag("fast")
 class BackendSpiTest {
@@ -51,7 +51,7 @@ class BackendSpiTest {
 
     @Test
     fun nativeBackendAvailableHere() {
-        assumeTrue(Backends.isNativeAvailable(), "нативная BLAS/LAPACK на этой машине не загрузилась")
+        assumeTrue(Backends.isNativeAvailable(), "native BLAS/LAPACK failed to load on this machine")
         assertTrue(Backends.native().isNative)
         assertEquals(2, Backends.available().size)
         assertTrue(Backends.available()[0].isNative)

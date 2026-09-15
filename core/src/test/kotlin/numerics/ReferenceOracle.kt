@@ -3,17 +3,17 @@ package numerics
 import kotlin.math.abs
 
 /**
- * Независимая реализация линейной алгебры на чистом Kotlin для перекрёстной проверки
- * бэкендов в тестах: умножения прямыми циклами и LU с частичным выбором ведущего
- * элемента. Не ссылается ни на единую точку входа [LinearAlgebra], ни на [numerics.backend.Backends],
- * иначе сверка замкнулась бы сама на себя.
+ * Independent pure-Kotlin linear algebra implementation for cross-checking the backends
+ * in tests: products by plain loops and LU with partial pivoting. Does not reference
+ * the [LinearAlgebra] entry point or [numerics.backend.Backends], otherwise the
+ * cross-check would be circular.
  */
 object ReferenceOracle {
 
-    /** Создаёт нулевую матрицу размера rows x cols. */
+    /** Creates a zero matrix of size rows x cols. */
     private fun zeros(rows: Int, cols: Int): Array<DoubleArray> = Array(rows) { DoubleArray(cols) }
 
-    /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
+    /** Product of matrix A (m x k) and vector x (k) -> vector (m). */
     fun matVec(a: Array<DoubleArray>, x: DoubleArray): DoubleArray {
         val m = a.size
         val out = DoubleArray(m)
@@ -26,7 +26,7 @@ object ReferenceOracle {
         return out
     }
 
-    /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
+    /** Transposed product A^T y, A: m x n, y: m -> vector n. */
     fun matTransVec(a: Array<DoubleArray>, y: DoubleArray): DoubleArray {
         val m = a.size
         val n = a[0].size
@@ -39,7 +39,7 @@ object ReferenceOracle {
         return out
     }
 
-    /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
+    /** Matrix product A (m x k) times B (k x p) -> (m x p). */
     fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>): Array<DoubleArray> {
         val m = a.size
         val k = b.size
@@ -58,7 +58,7 @@ object ReferenceOracle {
         return out
     }
 
-    /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
+    /** Product A^T diag(w) A for A: m x n, w: m -> symmetric n x n. */
     fun atWa(a: Array<DoubleArray>, w: DoubleArray): Array<DoubleArray> {
         val m = a.size
         val n = a[0].size
@@ -76,7 +76,7 @@ object ReferenceOracle {
         return out
     }
 
-    /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
+    /** Element-wise sum A + s*B (same dimensions). */
     fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double): Array<DoubleArray> {
         val out = Array(a.size) { a[it].copyOf() }
         for (i in a.indices) for (j in a[i].indices) out[i][j] += s * b[i][j]
@@ -84,27 +84,27 @@ object ReferenceOracle {
     }
 
     /**
-     * Порог вырожденности ведущего элемента, относительный к масштабу матрицы.
+     * Pivot singularity threshold, relative to the matrix scale.
      *
-     * Используется как `PIVOT_RELATIVE_TOLERANCE * ||A||_inf`. Абсолютный порог
-     * (ранее 1e-300) фактически проверял лишь строгий машинный ноль и пропускал
-     * практически вырожденные матрицы: система с числом обусловленности ~1e18
-     * решалась без исключения и возвращала нечисловой результат. Значение 1e-14 близко к машинному эпсилону
-     * double (2.2e-16) с запасом на накопление ошибок исключения Гаусса.
+     * Used as `PIVOT_RELATIVE_TOLERANCE * ||A||_inf`. An absolute threshold
+     * (formerly 1e-300) effectively checked only for an exact machine zero and let
+     * practically singular matrices through: a system with condition number ~1e18
+     * was solved without an exception and returned a non-finite result. The value 1e-14 is close to
+     * the double machine epsilon (2.2e-16) with a margin for error accumulation in Gaussian elimination.
      */
     private const val PIVOT_RELATIVE_TOLERANCE = 1e-14
 
     /**
-     * Решение плотной СЛАУ A x = b методом LU с частичным выбором ведущего элемента;
-     * A и b не изменяются. Ведущий элемент, малый относительно нормы матрицы, и
-     * нечисловой результат считаются вырожденностью.
-     * @throws IllegalStateException при вырожденности или нечисловом результате.
+     * Solves the dense linear system A x = b by LU with partial pivoting;
+     * A and b are left unchanged. A pivot that is small relative to the matrix norm and
+     * a non-finite result are both treated as singularity.
+     * @throws IllegalStateException on singularity or a non-finite result.
      */
     fun solve(a: Array<DoubleArray>, b: DoubleArray): DoubleArray {
         val n = a.size
         val lu = Array(n) { a[it].copyOf() }
         val x = b.copyOf()
-        // Масштаб матрицы: максимальная строчная сумма модулей (норма ||A||_inf).
+        // Matrix scale: maximum absolute row sum (the ||A||_inf norm).
         var matrixNorm = 0.0
         for (row in a) {
             var rowSum = 0.0
@@ -119,7 +119,7 @@ object ReferenceOracle {
                 val v = abs(lu[r][col])
                 if (v > pivVal) { pivVal = v; pivRow = r }
             }
-            if (pivVal <= pivotTolerance) error("LU: матрица вырождена (col=$col)")
+            if (pivVal <= pivotTolerance) error("LU: matrix is singular (col=$col)")
             if (pivRow != col) {
                 val t = lu[col]; lu[col] = lu[pivRow]; lu[pivRow] = t
                 val tx = x[col]; x[col] = x[pivRow]; x[pivRow] = tx
@@ -134,18 +134,18 @@ object ReferenceOracle {
                 x[r] -= factor * x[col]
             }
         }
-        // обратный ход
+        // back substitution
         for (i in n - 1 downTo 0) {
             var s = x[i]
             val row = lu[i]
             for (j in i + 1 until n) s -= row[j] * x[j]
             x[i] = s / row[i]
         }
-        // Реакция на нечисловой результат: если во входных данных был NaN/Inf,
-        // вернуть NaN-вектор без исключения нельзя. То же требование дублируется в единой точке входа (для
-        // всех бэкендов), но здесь оно нужно и при прямом вызове оракула в тестах.
+        // Non-finite result handling: if the input contained NaN/Inf, returning a NaN vector
+        // without an exception is not acceptable. The same requirement is duplicated in the entry point (for
+        // all backends), but it is also needed here when tests call the oracle directly.
         for (v in x) {
-            if (v.isNaN() || v.isInfinite()) error("LU: матрица вырождена (нечисловой результат)")
+            if (v.isNaN() || v.isInfinite()) error("LU: matrix is singular (non-finite result)")
         }
         return x
     }

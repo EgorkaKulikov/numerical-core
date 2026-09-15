@@ -3,128 +3,128 @@ package numerics.backend
 import numerics.DenseMatrix
 
 /**
- * Интерфейс реализации плотной линейной алгебры над матрицами [DenseMatrix]
- * (плоский столбцовый формат) и плоскими векторами [DoubleArray].
+ * Dense linear algebra backend over [DenseMatrix] matrices (flat column-major storage)
+ * and flat [DoubleArray] vectors.
  *
- * Интерфейс подключаемой реализации: через него единая точка входа [numerics.LinearAlgebra]
- * обращается к вычислительному ядру; реализация подбирается в [Backends] и передаётся
- * явным параметром.
- * Столбцовый формат матриц совпадает с соглашением BLAS/LAPACK, поэтому данные
- * уходят в вычислительное ядро без перекладки.
+ * This is the pluggable-implementation interface: through it the single entry point
+ * [numerics.LinearAlgebra] calls into the computational kernel; the implementation is
+ * selected in [Backends] and passed as an explicit parameter.
+ * The column-major layout matches the BLAS/LAPACK convention, so data is handed to
+ * the kernel without repacking.
  *
- * Контракт реализаций:
- *  - входные матрицы и векторы не изменяются; там, где ядро пишет результат на место
- *    входа, реализация работает с копией;
- *  - согласованность размерностей проверяет вызывающий код ([numerics.LinearAlgebra]),
- *    реализация вправе полагаться на неё и не обязана дублировать проверки;
- *  - результат всегда новый объект, не разделяющий память с входом.
+ * Implementation contract:
+ *  - input matrices and vectors are never modified; where the kernel overwrites its input
+ *    with the result, the implementation works on a copy;
+ *  - dimension consistency is checked by the caller ([numerics.LinearAlgebra]); the
+ *    implementation may rely on it and need not duplicate the checks;
+ *  - the result is always a new object that does not share memory with the input.
  */
 public interface LinAlgBackend {
 
-    /** Человекочитаемое имя реализации для журнала и диагностики. */
+    /** Human-readable backend name for logging and diagnostics. */
     public val name: String
 
-    /** Истина, если вычисления выполняет системная (нативная) библиотека BLAS/LAPACK. */
+    /** True if computations are performed by the system (native) BLAS/LAPACK library. */
     public val isNative: Boolean
 
     /**
-     * Обновление вектора `y += alpha·x` на месте (daxpy).
-     * @throws IllegalArgumentException если длины `x` и `y` различаются.
+     * In-place vector update `y += alpha·x` (daxpy).
+     * @throws IllegalArgumentException if the lengths of `x` and `y` differ.
      */
     public fun axpy(alpha: Double, x: DoubleArray, y: DoubleArray)
 
-    /** Произведение A·x для A размера m×k и x длины k; результат длины m. */
+    /** Product A·x for A of size m×k and x of length k; the result has length m. */
     public fun matVec(a: DenseMatrix, x: DoubleArray): DoubleArray
 
-    /** Произведение Aᵀ·y для A размера m×n и y длины m; результат длины n. */
+    /** Product Aᵀ·y for A of size m×n and y of length m; the result has length n. */
     public fun matTransVec(a: DenseMatrix, y: DoubleArray): DoubleArray
 
-    /** Произведение A·B для A размера m×k и B размера k×p; результат m×p. */
+    /** Product A·B for A of size m×k and B of size k×p; the result is m×p. */
     public fun matMat(a: DenseMatrix, b: DenseMatrix): DenseMatrix
 
-    /** Произведение Aᵀ·B для A размера m×n и B размера m×p; результат n×p. */
+    /** Product Aᵀ·B for A of size m×n and B of size m×p; the result is n×p. */
     public fun matTransMat(a: DenseMatrix, b: DenseMatrix): DenseMatrix
 
     /**
-     * Решение системы A·X = B для квадратной A и правых частей — столбцов B.
-     * Разложение LU с частичным выбором ведущего элемента.
+     * Solves the system A·X = B for square A with the columns of B as right-hand sides.
+     * LU factorization with partial pivoting.
      *
-     * @return матрица X тех же размеров, что B.
-     * @throws IllegalStateException если в ходе разложения встретился нулевой ведущий
-     *   элемент (матрица вырождена).
+     * @return matrix X of the same size as B.
+     * @throws IllegalStateException if a zero pivot was encountered during the
+     *   factorization (the matrix is singular).
      */
     public fun solve(a: DenseMatrix, b: DenseMatrix): DenseMatrix
 
     /**
-     * Разложение LU с частичным выбором ведущего элемента: P·A = L·U.
-     * Обнаруженная вырожденность не прерывает разложение и отражается в
+     * LU factorization with partial pivoting: P·A = L·U.
+     * Detected singularity does not abort the factorization and is reported via
      * [LuFactorization.singularAt].
      */
     public fun luFactor(a: DenseMatrix): LuFactorization
 
     /**
-     * Решение A·X = B по готовому разложению [lu] квадратной матрицы A.
-     * @throws IllegalArgumentException если разложение вырождено ([LuFactorization.isSingular]).
+     * Solves A·X = B using an existing factorization [lu] of the square matrix A.
+     * @throws IllegalArgumentException if the factorization is singular ([LuFactorization.isSingular]).
      */
     public fun luSolve(lu: LuFactorization, b: DenseMatrix): DenseMatrix
 
     /**
-     * Обратная матрица как решение A·X = I по LU-разложению; невязка ‖A·X − I‖ контролируется
-     * так же, как при решении системы. Возвращает `null`, если A вырождена.
+     * Inverse matrix as the solution of A·X = I via LU factorization; the residual ‖A·X − I‖
+     * is controlled the same way as when solving a system. Returns `null` if A is singular.
      */
     public fun inverse(a: DenseMatrix): DenseMatrix?
 
     /**
-     * Разложение Холецкого A = L·Lᵀ для симметричной положительно определённой A;
-     * читается только нижний треугольник A.
-     * @return нижнетреугольная L (элементы выше диагонали равны нулю) либо `null`,
-     *   если A не является положительно определённой.
+     * Cholesky factorization A = L·Lᵀ for symmetric positive definite A;
+     * only the lower triangle of A is read.
+     * @return lower-triangular L (entries above the diagonal are zero), or `null`
+     *   if A is not positive definite.
      */
     public fun cholesky(a: DenseMatrix): DenseMatrix?
 
     /**
-     * Собственные значения симметричной матрицы по возрастанию; читается только
-     * верхний треугольник A.
-     * @throws IllegalStateException если итерационный алгоритм не сошёлся.
+     * Eigenvalues of a symmetric matrix in ascending order; only the upper
+     * triangle of A is read.
+     * @throws IllegalStateException if the iterative algorithm failed to converge.
      */
     public fun symmetricEigenvalues(a: DenseMatrix): DoubleArray
 
     /**
-     * Оценка обратного числа обусловленности в норме «1»: приближение к
-     * `1 / (‖A‖₁ · ‖A⁻¹‖₁)` по разложению [lu] и известной норме [norm1] исходной матрицы.
-     * Значение 0 означает численно вырожденную матрицу.
+     * Estimate of the reciprocal condition number in the 1-norm: an approximation of
+     * `1 / (‖A‖₁ · ‖A⁻¹‖₁)` from the factorization [lu] and the known norm [norm1] of the original matrix.
+     * A value of 0 means the matrix is numerically singular.
      */
     public fun reciprocalCondition1(lu: LuFactorization, norm1: Double): Double
 
-    /** Матричная норма указанного вида; для пустой матрицы — 0. */
+    /** Matrix norm of the given kind; 0 for an empty matrix. */
     public fun norm(a: DenseMatrix, kind: MatrixNorm): Double
 }
 
-/** Виды матричных норм, доступные в [LinAlgBackend.norm]. */
+/** Kinds of matrix norms available in [LinAlgBackend.norm]. */
 public enum class MatrixNorm {
-    /** Наибольшая сумма модулей по столбцам, ‖A‖₁. */
+    /** Maximum absolute column sum, ‖A‖₁. */
     ONE,
 
-    /** Наибольшая сумма модулей по строкам, ‖A‖∞. */
+    /** Maximum absolute row sum, ‖A‖∞. */
     INF,
 
-    /** Корень из суммы квадратов всех элементов, ‖A‖F. */
+    /** Square root of the sum of squares of all entries, ‖A‖F. */
     FROBENIUS,
 
-    /** Наибольший модуль элемента, max|aᵢⱼ| (не является матричной нормой в строгом смысле). */
+    /** Largest absolute entry, max|aᵢⱼ| (not a matrix norm in the strict sense). */
     MAX,
 }
 
 /**
- * Результат разложения LU с частичным выбором ведущего элемента.
+ * Result of an LU factorization with partial pivoting.
  *
- * @property lu множители L и U в одной матрице: единичная нижняя треугольная L под
- *   диагональю, верхняя треугольная U на диагонали и выше.
- * @property ipiv перестановки строк: строка i менялась со строкой `ipiv[i]` (нумерация с 1).
- * @property singularAt 0, если матрица невырождена; иначе номер k (с 1) первого нулевого
- *   диагонального элемента U — разложение завершено, но решать систему по нему нельзя.
+ * @property lu the factors L and U packed in one matrix: unit lower-triangular L below
+ *   the diagonal, upper-triangular U on and above the diagonal.
+ * @property ipiv row permutations: row i was swapped with row `ipiv[i]` (1-based).
+ * @property singularAt 0 if the matrix is non-singular; otherwise the index k (1-based) of the
+ *   first zero diagonal entry of U — the factorization is complete, but it cannot be used to solve a system.
  */
 public class LuFactorization(public val lu: DenseMatrix, public val ipiv: IntArray, public val singularAt: Int) {
-    /** Истина, если в ходе разложения встретился нулевой ведущий элемент. */
+    /** True if a zero pivot was encountered during the factorization. */
     public val isSingular: Boolean get() = singularAt > 0
 }

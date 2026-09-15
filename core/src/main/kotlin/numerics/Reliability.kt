@@ -3,49 +3,48 @@ package numerics
 import kotlin.math.abs
 
 /**
- * Порог, ниже которого значение считается шумом округления, а не измерением.
- * Выбран на два–три порядка выше машинного эпсилона double (2.2e-16), чтобы отделить
- * погрешность метода от накопленной погрешности округления в суммах длины порядка 10²–10³.
+ * Threshold below which a value is treated as rounding noise rather than a measurement.
+ * Chosen two to three orders of magnitude above the double machine epsilon (2.2e-16) to separate
+ * the method error from the rounding error accumulated in sums of length 10²–10³.
  *
- * Величина сначала классифицируется ([measured]), и отношение ([ratio]) и порядок сходимости
- * ([orderOrNull], [reliableOrders]) по конструкции не вычисляются, если хотя бы один
- * аргумент лежит на уровне шума.
+ * A value is first classified ([measured]); the ratio ([ratio]) and the convergence order
+ * ([orderOrNull], [reliableOrders]) are by construction not computed if either argument
+ * lies at noise level.
  */
 public const val MACHINE_NOISE_THRESHOLD: Double = 1e-13
 
 /**
- * Величина вместе с суждением о её достоверности.
+ * A value together with a verdict on its reliability.
  *
- * Тип намеренно закрытый (`sealed`): пройти от числа к производной величине
- * (отношению, порядку сходимости) можно только через явное сопоставление
- * с образцом, поэтому недостоверное значение нельзя использовать по
- * невнимательности.
+ * The type is deliberately `sealed`: going from the number to a derived quantity
+ * (ratio, convergence order) is possible only through explicit pattern matching,
+ * so an unreliable value cannot be used by accident.
  */
 public sealed interface Measured {
-    /** Само численное значение — доступно всегда, в том числе для печати с пометкой. */
+    /** The numeric value itself — always available, e.g. for printing with a marker. */
     public val value: Double
 
-    /** Величина превышает порог достоверности и может участвовать в вычислениях. */
+    /** The value exceeds the reliability threshold and may take part in computations. */
     public data class Reliable(override val value: Double) : Measured
 
     /**
-     * Величина не превышает порог [threshold] (или не является конечной) — это шум.
-     * @property threshold порог достоверности, с которым сравнивалась величина.
+     * The value does not exceed the threshold [threshold] (or is not finite) — it is noise.
+     * @property threshold the reliability threshold the value was compared against.
      */
     public data class AtNoiseLevel(override val value: Double, val threshold: Double) : Measured
 }
 
 /**
- * Классифицирует величину относительно порога достоверности.
+ * Classifies a value against a reliability threshold.
  *
- * Нефинитные значения ([Double.NaN], бесконечности) считаются недостоверными:
- * они возникают при делении на нуль и при переполнении и не являются измерением.
+ * Non-finite values ([Double.NaN], infinities) are treated as unreliable:
+ * they arise from division by zero and from overflow and are not measurements.
  *
- * @throws IllegalArgumentException если `threshold <= 0` — нулевой порог означал
- *   бы отсутствие проверки, то есть ровно ту ошибку, которую тип предотвращает.
+ * @throws IllegalArgumentException if `threshold <= 0` — a zero threshold would mean
+ *   no check at all, i.e. exactly the mistake this type prevents.
  */
 public fun measured(value: Double, threshold: Double = MACHINE_NOISE_THRESHOLD): Measured {
-    require(threshold > 0.0) { "measured: требуется threshold > 0, получено $threshold" }
+    require(threshold > 0.0) { "measured: threshold must be > 0, got $threshold" }
     return if (value.isFinite() && abs(value) >= threshold) {
         Measured.Reliable(value)
     } else {
@@ -54,10 +53,10 @@ public fun measured(value: Double, threshold: Double = MACHINE_NOISE_THRESHOLD):
 }
 
 /**
- * Отношение двух величин или `null`, если хотя бы одна из них недостоверна.
+ * Ratio of two values, or `null` if either of them is unreliable.
  *
- * `null` здесь — не «не удалось посчитать», а «величина не определена»:
- * отношение чисел на уровне шума округления не несёт информации о методе.
+ * `null` here means "the quantity is undefined", not "could not be computed":
+ * the ratio of numbers at rounding-noise level carries no information about the method.
  */
 public fun ratio(numerator: Measured, denominator: Measured): Double? =
     if (numerator is Measured.Reliable && denominator is Measured.Reliable) {
@@ -67,11 +66,11 @@ public fun ratio(numerator: Measured, denominator: Measured): Double? =
     }
 
 /**
- * Эмпирический порядок сходимости `log2(E_h / E_{h/2})` по паре достоверных
- * погрешностей или `null`.
+ * Empirical convergence order `log2(E_h / E_{h/2})` from a pair of reliable errors,
+ * or `null`.
  *
- * `null` возвращается, если хотя бы одна погрешность на уровне шума ([ratio])
- * либо их отношение неположительно (логарифм не определён).
+ * `null` is returned if either error is at noise level ([ratio]) or their ratio is
+ * non-positive (the logarithm is undefined).
  */
 public fun orderOrNull(coarse: Measured, fine: Measured): Double? {
     val r = ratio(coarse, fine) ?: return null
@@ -79,16 +78,16 @@ public fun orderOrNull(coarse: Measured, fine: Measured): Double? {
 }
 
 /**
- * Столбец порядков сходимости с применённым порогом достоверности —
- * вариант [orders], который отказывается считать порядок по шуму.
+ * Column of convergence orders with the reliability threshold applied —
+ * the variant of [orders] that refuses to compute an order from noise.
  *
- * Соотношение с [orders]: обе функции дают для последней строки «не определено»
- * (там просто нет следующей строки). Отличие в том, что [orders] считает
- * порядок по любым положительным величинам, а эта функция — только по
- * величинам не ниже [threshold]; «не определено» здесь кодируется `null`, а не
- * [Double.NaN], чтобы значение нельзя было случайно подставить в арифметику.
- * Для печати в одном формате достаточно `reliableOrders(errs).map { it ?: Double.NaN }`,
- * и при всех погрешностях выше порога результат совпадает с `orders(errs)`.
+ * Relation to [orders]: both functions yield "undefined" for the last row
+ * (there is simply no next row). The difference is that [orders] computes the order
+ * from any positive values, whereas this function uses only values not below [threshold];
+ * "undefined" is encoded here as `null` rather than [Double.NaN], so the value cannot be
+ * accidentally fed into arithmetic. For printing in a single format
+ * `reliableOrders(errs).map { it ?: Double.NaN }` suffices, and when all errors are above
+ * the threshold the result coincides with `orders(errs)`.
  */
 public fun reliableOrders(errs: List<Double>, threshold: Double = MACHINE_NOISE_THRESHOLD): List<Double?> {
     val m = errs.map { measured(it, threshold) }
@@ -96,12 +95,12 @@ public fun reliableOrders(errs: List<Double>, threshold: Double = MACHINE_NOISE_
 }
 
 /**
- * Константа `C_h = E_h / h^p` по достоверной погрешности или `null` —
- * вариант [constCh] с применённым порогом достоверности.
+ * Constant `C_h = E_h / h^p` from a reliable error, or `null` —
+ * the variant of [constCh] with the reliability threshold applied.
  *
- * @throws IllegalArgumentException если шаг `h` не положителен
+ * @throws IllegalArgumentException if the step `h` is not positive
  */
 public fun reliableConstCh(eh: Measured, h: Double, p: Double): Double? {
-    require(h > 0) { "шаг сетки должен быть положительным, получено $h" }
+    require(h > 0) { "grid step must be positive, got $h" }
     return if (eh is Measured.Reliable) constCh(eh.value, h, p) else null
 }

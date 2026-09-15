@@ -3,13 +3,13 @@ package numerics
 import kotlin.math.abs
 
 /**
- * Составная квадратура Гаусса–Лежандра: на каждом подынтервале разбиения применяется
- * правило с `nodesPerSub` узлами, точное для многочленов степени `2·nodesPerSub − 1`.
+ * Composite Gauss–Legendre quadrature: on each subinterval of the partition a rule with
+ * `nodesPerSub` nodes is applied, exact for polynomials of degree `2·nodesPerSub − 1`.
  *
- * Эталонные узлы и веса на `[-1, 1]` вычисляются один раз в конструкторе
- * (см. [gaussLegendreReference]) и переносятся на каждый подынтервал линейной заменой.
+ * The reference nodes and weights on `[-1, 1]` are computed once in the constructor
+ * (see [gaussLegendreReference]) and mapped onto each subinterval by a linear change of variable.
  *
- * @param nodesPerSub число узлов на каждом подынтервале (не меньше 1)
+ * @param nodesPerSub number of nodes on each subinterval (at least 1)
  */
 public class GaussLegendre(public val nodesPerSub: Int = 8) {
 
@@ -17,23 +17,23 @@ public class GaussLegendre(public val nodesPerSub: Int = 8) {
     private val refWeights: DoubleArray
 
     init {
-        require(nodesPerSub >= 1) { "число узлов на подынтервал должно быть не меньше 1, получено $nodesPerSub" }
+        require(nodesPerSub >= 1) { "number of nodes per subinterval must be at least 1, got $nodesPerSub" }
         val (nodes, weights) = gaussLegendreReference(nodesPerSub)
         refNodes = nodes
         refWeights = weights
     }
 
     /**
-     * Интеграл `f` по составному разбиению `breakpoints`: точки строго возрастают,
-     * первая и последняя — концы отрезка интегрирования.
+     * Integral of `f` over the composite partition `breakpoints`: the points are strictly increasing,
+     * the first and the last are the endpoints of the integration interval.
      *
-     * @throws IllegalArgumentException если точек меньше двух или они не строго возрастают
+     * @throws IllegalArgumentException if there are fewer than two points or they are not strictly increasing
      */
     public fun integrate(breakpoints: DoubleArray, f: (Double) -> Double): Double {
-        require(breakpoints.size >= 2) { "разбиение должно содержать не менее двух точек, получено ${breakpoints.size}" }
+        require(breakpoints.size >= 2) { "partition must contain at least two points, got ${breakpoints.size}" }
         for (k in 0 until breakpoints.size - 1) {
             require(breakpoints[k] < breakpoints[k + 1]) {
-                "точки разбиения должны строго возрастать; нарушение между позициями $k и ${k + 1}"
+                "breakpoints must be strictly increasing; violated between positions $k and ${k + 1}"
             }
         }
         var sum = 0.0
@@ -51,8 +51,8 @@ public class GaussLegendre(public val nodesPerSub: Int = 8) {
     }
 
     /**
-     * Интеграл по одному отрезку от `lo` до `hi`. Допускается `lo > hi` — тогда концы
-     * переставляются и результат берётся со знаком минус; при `lo == hi` возвращается 0.
+     * Integral over a single interval from `lo` to `hi`. `lo > hi` is allowed — the endpoints
+     * are swapped and the result is negated; for `lo == hi` 0 is returned.
      */
     public fun integrateInterval(lo: Double, hi: Double, f: (Double) -> Double): Double =
         when {
@@ -61,22 +61,22 @@ public class GaussLegendre(public val nodesPerSub: Int = 8) {
             else -> integrate(doubleArrayOf(lo, hi), f)
         }
 
-    /** Эталонные узлы и веса на `[-1, 1]` (возвращаются копии внутренних массивов). */
+    /** Reference nodes and weights on `[-1, 1]` (copies of the internal arrays are returned). */
     public fun refNodesWeights(): Pair<DoubleArray, DoubleArray> = refNodes.copyOf() to refWeights.copyOf()
 
-    /** Вычисление эталонных узлов и весов Гаусса–Лежандра. */
+    /** Computation of the reference Gauss–Legendre nodes and weights. */
     public companion object {
         /**
-         * Узлы и веса Гаусса–Лежандра на `[-1, 1]` для `m` точек: метод Ньютона по нулям
-         * многочлена Лежандра `P_m` от начального приближения `cos(π(i + 3/4)/(m + 1/2))`,
-         * веса `2 / ((1 − x²)·P_m'(x)²)`. Правило точно для многочленов степени `2m − 1`.
+         * Gauss–Legendre nodes and weights on `[-1, 1]` for `m` points: Newton's method on the zeros
+         * of the Legendre polynomial `P_m` from the initial guess `cos(π(i + 3/4)/(m + 1/2))`,
+         * weights `2 / ((1 − x²)·P_m'(x)²)`. The rule is exact for polynomials of degree `2m − 1`.
          *
-         * @throws IllegalArgumentException если `m < 1`
-         * @throws IllegalStateException если итерации Ньютона для какого-либо узла не сошлись
-         *   (исключение — защита от бесконечного цикла, на практике не возникает)
+         * @throws IllegalArgumentException if `m < 1`
+         * @throws IllegalStateException if the Newton iterations for some node did not converge
+         *   (the exception guards against an infinite loop; in practice it never occurs)
          */
         public fun gaussLegendreReference(m: Int): Pair<DoubleArray, DoubleArray> {
-            require(m >= 1) { "число узлов должно быть не меньше 1, получено $m" }
+            require(m >= 1) { "number of nodes must be at least 1, got $m" }
             val maxIter = 100
             val nodes = DoubleArray(m)
             val weights = DoubleArray(m)
@@ -99,7 +99,7 @@ public class GaussLegendre(public val nodesPerSub: Int = 8) {
                         break
                     }
                 }
-                check(converged) { "итерации Ньютона для узла $i не сошлись за $maxIter шагов" }
+                check(converged) { "Newton iterations for node $i did not converge in $maxIter steps" }
                 var p0 = 1.0
                 var p1 = x
                 for (k in 2..m) {

@@ -6,67 +6,67 @@ import numerics.backend.LinAlgBackend
 import numerics.backend.MatrixNorm
 
 /**
- * Линейная алгебра над плотными матрицами — единая точка входа библиотеки.
- * Основной тип матриц — [DenseMatrix] (плоский столбцовый формат); перегрузки на
- * [Array]<[DoubleArray]> сохранены как адаптеры с копией через [DenseMatrix.fromRows]
- * и [DenseMatrix.toRows].
+ * Linear algebra over dense matrices — the library's single entry point.
+ * The primary matrix type is [DenseMatrix] (flat column-major layout); the
+ * [Array]<[DoubleArray]> overloads are kept as adapters that copy via [DenseMatrix.fromRows]
+ * and [DenseMatrix.toRows].
  *
- * Вычислительные операции (умножения, решение СЛАУ, разложение Холецкого) выполняет
- * реализация линейной алгебры [LinAlgBackend], переданная последним параметром; значение
- * по умолчанию — [Backends.default] (системная BLAS/LAPACK при доступности, иначе
- * реализация на Java). Реализация передаётся параметром, а не глобальным переключателем:
- * результат вызова не зависит от состояния, выставленного другим кодом в той же JVM.
- * Обращение к [Backends.default] не создаёт объектов и подходит для вызова в цикле.
- * Нормы векторов, мера несимметричности и конструкторы реализованы в [DenseOps] без
- * обращения к реализации линейной алгебры.
+ * Computational operations (products, linear solves, Cholesky factorization) are performed
+ * by the [LinAlgBackend] implementation passed as the last parameter; the default is
+ * [Backends.default] (system BLAS/LAPACK when available, otherwise a pure-Java
+ * implementation). The backend is passed as a parameter rather than a global switch:
+ * the result of a call does not depend on state set by other code in the same JVM.
+ * Calling [Backends.default] allocates no objects and is suitable for use in a loop.
+ * Vector norms, the asymmetry measure and constructors are implemented in [DenseOps]
+ * without going through the backend.
  *
- * Проверки согласованности размеров и непустоты входа выполняются здесь ([Shapes]), до
- * передачи вычисления реализации, и завершаются [IllegalArgumentException] с русским
- * сообщением.
- * Нечисловые значения (NaN, бесконечность) проверяются только в [solve] и [cholesky];
- * остальные операции распространяют их по правилам арифметики с плавающей точкой, как BLAS.
+ * Shape-consistency and non-emptiness checks are performed here ([Shapes]), before the
+ * computation is handed to the backend, and fail with an [IllegalArgumentException]
+ * carrying a descriptive message.
+ * Non-finite values (NaN, infinity) are checked only in [solve] and [cholesky];
+ * all other operations propagate them according to floating-point arithmetic rules, like BLAS.
  */
 public object LinearAlgebra {
 
-    // --- Конструкторы матриц (без обращения к реализации линейной алгебры) ----
+    // --- Matrix constructors (no backend involved) ----------------------------
 
-    /** Создаёт нулевую матрицу размера rows x cols. */
+    /** Creates a zero matrix of size rows x cols. */
     public fun zeros(rows: Int, cols: Int): Array<DoubleArray> = DenseOps.zeros(rows, cols)
 
-    /** Единичная матрица размера n x n. */
+    /** Identity matrix of size n x n. */
     public fun identity(n: Int): Array<DoubleArray> = DenseOps.identity(n)
 
-    /** Создаёт нулевую матрицу rows x cols в плоском столбцовом формате. */
+    /** Creates a zero matrix rows x cols in flat column-major layout. */
     public fun zerosMatrix(rows: Int, cols: Int): DenseMatrix = DenseMatrix.zeros(rows, cols)
 
-    /** Единичная матрица n x n в плоском столбцовом формате. */
+    /** Identity matrix n x n in flat column-major layout. */
     public fun identityMatrix(n: Int): DenseMatrix = DenseMatrix.identity(n)
 
-    // --- Операции над DenseMatrix: вычисление передаётся реализации -----------
+    // --- Operations on DenseMatrix: computation is delegated to the backend ---
 
-    /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
+    /** Product of matrix A (m x k) and vector x (k) -> vector (m). */
     public fun matVec(
         a: DenseMatrix,
         x: DoubleArray,
         backend: LinAlgBackend = Backends.default(),
     ): DoubleArray {
-        Shapes.requireNonEmpty(a, "матрица A")
+        Shapes.requireNonEmpty(a, "matrix A")
         Shapes.requireVectorLength(x, a.cols, "x")
         return backend.matVec(a, x)
     }
 
-    /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
+    /** Transposed product A^T y, A: m x n, y: m -> vector n. */
     public fun matTransVec(
         a: DenseMatrix,
         y: DoubleArray,
         backend: LinAlgBackend = Backends.default(),
     ): DoubleArray {
-        Shapes.requireNonEmpty(a, "матрица A")
+        Shapes.requireNonEmpty(a, "matrix A")
         Shapes.requireVectorLength(y, a.rows, "y")
         return backend.matTransVec(a, y)
     }
 
-    /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
+    /** Product of matrices A (m x k) and B (k x p) -> (m x p). */
     public fun matMat(
         a: DenseMatrix,
         b: DenseMatrix,
@@ -76,15 +76,15 @@ public object LinearAlgebra {
         return backend.matMat(a, b)
     }
 
-    /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
+    /** Product A^T diag(w) A for A: m x n, w: m -> symmetric n x n. */
     public fun atWa(
         a: DenseMatrix,
         w: DoubleArray,
         backend: LinAlgBackend = Backends.default(),
     ): DenseMatrix {
-        Shapes.requireNonEmpty(a, "матрица A")
+        Shapes.requireNonEmpty(a, "matrix A")
         Shapes.requireVectorLength(w, a.rows, "w")
-        // B = diag(w)·A: строка i умножается на w[i]; затем A^T·B одним вызовом ядра.
+        // B = diag(w)·A: row i is scaled by w[i]; then A^T·B in a single kernel call.
         val scaled = a.copy()
         val d = scaled.data
         val m = a.rows
@@ -95,7 +95,7 @@ public object LinearAlgebra {
         return backend.matTransMat(a, scaled)
     }
 
-    /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
+    /** Element-wise sum A + s*B (matrices of the same shape). */
     public fun addScaled(
         a: DenseMatrix,
         b: DenseMatrix,
@@ -109,63 +109,63 @@ public object LinearAlgebra {
     }
 
     /**
-     * Относительный допуск на невязку решения СЛАУ, общий для всех реализаций.
+     * Relative residual tolerance for linear solves, shared by all backends.
      *
-     * Критерий: `||Ax-b||_inf <= SINGULARITY_RELATIVE_TOLERANCE * max(||A||_inf*||x||_inf, ||b||_inf)`.
+     * Criterion: `||Ax-b||_inf <= SINGULARITY_RELATIVE_TOLERANCE * max(||A||_inf*||x||_inf, ||b||_inf)`.
      *
-     * Критерием служит невязка, а не число обусловленности. Невязка доступна для любой
-     * реализации и дешева: O(n²) против O(n³) самого решения. Проверка по обусловленности
-     * была бы неверна по сути: системы с числом обусловленности порядка 1e10 решаются
-     * обратно устойчиво (невязка около 1e-16 относительно масштаба), и отвергать их нельзя.
+     * The criterion is the residual, not the condition number. The residual is available for
+     * any backend and is cheap: O(n²) versus O(n³) for the solve itself. A condition-number
+     * check would be wrong in principle: systems with condition number around 1e10 are solved
+     * backward-stably (residual near 1e-16 relative to the scale) and must not be rejected.
      *
-     * Обоснование порога 1e-10 — обратная устойчивость LU с частичным выбором ведущего
-     * элемента: невязка корректного решения ограничена величиной `c·n·ε·||A||·||x||` при
-     * ε = 2.2e-16 и умеренном факторе роста c, то есть примерно `n·ε` относительно
-     * масштаба системы. Для n до 10⁴ оценка сверху даёт порядок 1e-12, а наблюдаемая
-     * невязка обычно ещё на несколько порядков меньше оценки, поскольку ошибки округления
-     * частично компенсируются. Порог 1e-10 оставляет запас не менее двух порядков
-     * относительно оценки сверху и четырёх–пяти относительно типичной невязки: проверка
-     * отвергает решение, не удовлетворяющее системе, а не различает оттенки качества двух
-     * корректных разложений.
+     * The 1e-10 threshold is justified by the backward stability of LU with partial pivoting:
+     * the residual of a correct solution is bounded by `c·n·ε·||A||·||x||` with
+     * ε = 2.2e-16 and a moderate growth factor c, i.e. roughly `n·ε` relative to the scale
+     * of the system. For n up to 10⁴ the upper bound is about 1e-12, and the observed
+     * residual is usually several orders of magnitude below the bound because rounding
+     * errors partially cancel. The 1e-10 threshold leaves a margin of at least two orders
+     * of magnitude over the upper bound and four to five over the typical residual: the check
+     * rejects a solution that does not satisfy the system, rather than distinguishing shades
+     * of quality between two correct factorizations.
      *
-     * Слагаемое `||b||_inf` под максимумом защищает случай почти нулевого x: произведение
-     * `||A||*||x||` тогда близко к нулю, и без этого слагаемого любая ошибка округления
-     * выглядела бы как вырожденность.
+     * The `||b||_inf` term under the maximum protects the case of nearly zero x: the product
+     * `||A||*||x||` is then close to zero, and without this term any rounding error would
+     * look like singularity.
      *
-     * Граница применимости: проверка гарантирует, что метод не вернёт нечисловое решение
-     * или решение, не удовлетворяющее системе; прямую ошибку она не измеряет — для этого
-     * есть [solveDiagnosed].
+     * Scope: the check guarantees that the method does not return a non-finite solution or
+     * one that fails to satisfy the system; it does not measure the forward error — use
+     * [solveDiagnosed] for that.
      */
     public const val SINGULARITY_RELATIVE_TOLERANCE: Double = 1e-10
 
     /**
-     * Решение плотной СЛАУ A x = b переданной реализацией линейной алгебры.
+     * Solves the dense linear system A x = b with the given backend.
      *
-     * Входные A и b не изменяются. Единая семантика вырожденности обеспечивается
-     * здесь: сначала отвергается нечисловой вход (NaN или бесконечность), затем
-     * реализация сообщает о нулевом ведущем элементе, и наконец проверяется невязка
-     * решения (см. [SINGULARITY_RELATIVE_TOLERANCE]).
+     * The inputs A and b are not modified. Uniform singularity semantics are enforced
+     * here: non-finite input (NaN or infinity) is rejected first, then the backend
+     * reports a zero pivot, and finally the residual of the solution is checked
+     * (see [SINGULARITY_RELATIVE_TOLERANCE]).
      *
-     * Постпроверка контролирует обратную ошибку, а не точность результата: на
-     * численно вырожденной матрице невязка остаётся малой, тогда как прямая ошибка
-     * растёт как `cond(A) · ε`. Прямая ошибка здесь не измеряется, чтобы не удорожать
-     * решение; её оценку даёт [solveDiagnosed], а различие двух ошибок описано
-     * в [ForwardError].
+     * The post-check controls the backward error, not the accuracy of the result: on a
+     * numerically singular matrix the residual stays small while the forward error
+     * grows like `cond(A) · ε`. The forward error is not measured here to keep the
+     * solve cheap; [solveDiagnosed] estimates it, and the difference between the two
+     * errors is described in [ForwardError].
      *
-     * @return вектор решения x длины n.
-     * @throws IllegalArgumentException при пустой, неквадратной A или несогласованной длине b.
-     * @throws IllegalStateException при нечисловом входе, вырожденности либо невязке,
-     *         несовместимой с машинной точностью.
+     * @return solution vector x of length n.
+     * @throws IllegalArgumentException if A is empty or non-square, or the length of b does not match.
+     * @throws IllegalStateException on non-finite input, singularity, or a residual
+     *         inconsistent with machine precision.
      */
     public fun solve(
         a: DenseMatrix,
         b: DoubleArray,
         backend: LinAlgBackend = Backends.default(),
     ): DoubleArray {
-        Shapes.requireSquare(a, "матрица A")
+        Shapes.requireSquare(a, "matrix A")
         Shapes.requireVectorLength(b, a.rows, "b")
-        for (v in a.data) if (!v.isFinite()) error("система содержит нечисловые значения (NaN или бесконечность)")
-        for (v in b) if (!v.isFinite()) error("система содержит нечисловые значения (NaN или бесконечность)")
+        for (v in a.data) if (!v.isFinite()) error("System contains non-finite values (NaN or infinity)")
+        for (v in b) if (!v.isFinite()) error("System contains non-finite values (NaN or infinity)")
         val n = a.rows
         val x = backend.solve(a, DenseMatrix.fromColumnMajor(n, 1, b.copyOf())).data
         checkSolution(a, b, x, backend)
@@ -173,37 +173,37 @@ public object LinearAlgebra {
     }
 
     /**
-     * Решение СЛАУ вместе с оценкой его прямой ошибки.
+     * Solution of a linear system together with an estimate of its forward error.
      *
-     * @property x тот же вектор, что вернул бы [LinearAlgebra.solve] на тех же входных данных
-     *   — диагностика не меняет вычислений и не уточняет решение.
-     * @property forwardError граница относительной прямой ошибки либо явное свидетельство
-     *   того, что границы не существует; см. [ForwardError].
+     * @property x the same vector that [LinearAlgebra.solve] would return on the same inputs
+     *   — the diagnostics neither change the computation nor refine the solution.
+     * @property forwardError bound on the relative forward error, or explicit evidence
+     *   that no bound exists; see [ForwardError].
      */
     public class DiagnosedSolution(public val x: DoubleArray, public val forwardError: ForwardError)
 
     /**
-     * Решает `A x = b` и оценивает прямую ошибку полученного решения.
+     * Solves `A x = b` and estimates the forward error of the computed solution.
      *
-     * Постпроверка внутри [solve] контролирует обратную ошибку — невязку относительно
-     * масштаба системы; у LU с частичным выбором она мала всегда, включая численно
-     * вырожденные матрицы, и ничего не говорит о точности. Прямая ошибка растёт как
-     * `cond(A) · ε` и на плохо обусловленной системе съедает значащие цифры.
+     * The post-check inside [solve] controls the backward error — the residual relative
+     * to the scale of the system; for LU with partial pivoting it is always small, including
+     * on numerically singular matrices, and says nothing about accuracy. The forward error
+     * grows like `cond(A) · ε` and eats significant digits on an ill-conditioned system.
      *
-     * Диагностика не встроена в [solve], потому что стоит отдельных O(n³)
-     * (или O(n²) сверх разложения при [ConditionSource.ESTIMATE]) и нужна не при
-     * каждом решении.
+     * The diagnostics are not built into [solve] because they cost a separate O(n³)
+     * (or O(n²) on top of the factorization with [ConditionSource.ESTIMATE]) and are not
+     * needed on every solve.
      *
-     * Функция не бросает исключение из-за большого `cond` и не подменяет решение;
-     * доверять ли числу, решает вызывающий. На точно вырожденной системе бросается
-     * [IllegalStateException] тем же контрактом, что и [solve].
+     * The function does not throw for a large `cond` and does not replace the solution;
+     * whether to trust the number is up to the caller. On an exactly singular system it throws
+     * [IllegalStateException] under the same contract as [solve].
      *
-     * @param source чем оценивать `cond`; см. [ConditionSource].
-     * @param tolerance порог достоверности по невязке обращения; влияет на результат
-     *        только при [ConditionSource.INVERSION].
-     * @return решение и оценку его прямой ошибки.
-     * @throws IllegalStateException при вырожденности — тем же контрактом, что и [solve].
-     * @throws IllegalArgumentException при [ConditionSource.SYMMETRIC_SPECTRUM] и несимметричной `A`.
+     * @param source how to estimate `cond`; see [ConditionSource].
+     * @param tolerance reliability threshold on the inversion residual; affects the result
+     *        only with [ConditionSource.INVERSION].
+     * @return the solution and an estimate of its forward error.
+     * @throws IllegalStateException on singularity — under the same contract as [solve].
+     * @throws IllegalArgumentException with [ConditionSource.SYMMETRIC_SPECTRUM] and a non-symmetric `A`.
      */
     public fun solveDiagnosed(
         a: DenseMatrix,
@@ -224,12 +224,12 @@ public object LinearAlgebra {
         return DiagnosedSolution(x, forward)
     }
 
-    /** Постпроверка решения, общая для всех реализаций (см. [SINGULARITY_RELATIVE_TOLERANCE]). */
+    /** Post-check of the solution, shared by all backends (see [SINGULARITY_RELATIVE_TOLERANCE]). */
     private fun checkSolution(a: DenseMatrix, b: DoubleArray, x: DoubleArray, backend: LinAlgBackend) {
         val n = a.rows
         for (i in x.indices) {
             if (x[i].isNaN() || x[i].isInfinite()) {
-                error("solve: матрица вырождена — нечисловое решение x[$i]=${x[i]} (n=$n)")
+                error("solve: matrix is singular — non-finite solution x[$i]=${x[i]} (n=$n)")
             }
         }
         val ax = backend.matVec(a, x)
@@ -247,104 +247,104 @@ public object LinearAlgebra {
         val scale = maxOf(matrixNorm * solutionNorm, rhsNorm)
         if (residual > SINGULARITY_RELATIVE_TOLERANCE * scale) {
             error(
-                "solve: матрица вырождена — невязка слишком велика: n=$n, " +
+                "solve: matrix is singular — residual too large: n=$n, " +
                     "||A||_inf=$matrixNorm, ||x||_inf=$solutionNorm, ||b||_inf=$rhsNorm, " +
                     "||Ax-b||_inf=$residual > $SINGULARITY_RELATIVE_TOLERANCE * $scale"
             )
         }
     }
 
-    // --- Скалярные и служебные операции (без обращения к реализации) ----------
+    // --- Scalar and utility operations (no backend involved) ------------------
 
-    /** Евклидова норма вектора. */
+    /** Euclidean norm of a vector. */
     public fun norm2(x: DoubleArray): Double = DenseOps.norm2(x)
 
-    /** Бесконечная (равномерная) норма вектора. */
+    /** Infinity (uniform) norm of a vector. */
     public fun normInf(x: DoubleArray): Double = DenseOps.normInf(x)
 
     /**
-     * Разложение Холецкого A = L Lᵀ для симметричной положительно определённой A (dpotrf).
+     * Cholesky factorization A = L Lᵀ of a symmetric positive definite A (dpotrf).
      *
-     * @return нижнетреугольная L (элементы выше диагонали равны нулю) или `null`,
-     *   если A не положительно определена.
-     * @throws IllegalArgumentException если A пуста, не квадратна, содержит нечисловые
-     *   значения или её асимметрия превышает `1e-12 · ‖A‖∞`.
+     * @return lower-triangular L (entries above the diagonal are zero), or `null`
+     *   if A is not positive definite.
+     * @throws IllegalArgumentException if A is empty, non-square, contains non-finite
+     *   values, or its asymmetry exceeds `1e-12 · ‖A‖∞`.
      */
     public fun cholesky(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): DenseMatrix? {
-        Shapes.requireSquare(a, "матрица A")
-        Shapes.requireFinite(a, "матрица A")
-        Shapes.requireSymmetric(a, backend.norm(a, MatrixNorm.INF), "матрица A")
+        Shapes.requireSquare(a, "matrix A")
+        Shapes.requireFinite(a, "matrix A")
+        Shapes.requireSymmetric(a, backend.norm(a, MatrixNorm.INF), "matrix A")
         return backend.cholesky(a)
     }
 
-    /** Симметрия: max|A - A^T|; требует непустую квадратную A. */
+    /** Asymmetry: max|A - A^T|; requires a non-empty square A. */
     public fun maxAsymmetry(a: DenseMatrix): Double {
-        Shapes.requireSquare(a, "матрица A")
+        Shapes.requireSquare(a, "matrix A")
         return DenseOps.maxAsymmetry(a.toRows())
     }
 
-    // --- Адаптеры над Array<DoubleArray> ---------------------------------------
-    // Рваный массив отвергает DenseMatrix.fromRows (IllegalArgumentException с номером строки).
+    // --- Adapters over Array<DoubleArray> ---------------------------------------
+    // A ragged array is rejected by DenseMatrix.fromRows (IllegalArgumentException with the row index).
 
     private fun rows(a: Array<DoubleArray>, op: String): DenseMatrix {
-        require(a.isNotEmpty() && a[0].isNotEmpty()) { "$op: пустая матрица A" }
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "$op: matrix A is empty" }
         return DenseMatrix.fromRows(a)
     }
 
-    /** Произведение матрицы A (m x k) на вектор x (k) -> вектор (m). */
+    /** Product of matrix A (m x k) and vector x (k) -> vector (m). */
     public fun matVec(a: Array<DoubleArray>, x: DoubleArray, backend: LinAlgBackend = Backends.default()): DoubleArray =
         matVec(rows(a, "matVec"), x, backend)
 
-    /** Транспонированное произведение A^T y, A: m x n, y: m -> вектор n. */
+    /** Transposed product A^T y, A: m x n, y: m -> vector n. */
     public fun matTransVec(a: Array<DoubleArray>, y: DoubleArray, backend: LinAlgBackend = Backends.default()): DoubleArray =
         matTransVec(rows(a, "matTransVec"), y, backend)
 
-    /** Произведение матриц A (m x k) на B (k x p) -> (m x p). */
+    /** Product of matrices A (m x k) and B (k x p) -> (m x p). */
     @Deprecated(
-        "Используйте перегрузку с DenseMatrix",
+        "Use the DenseMatrix overload",
         ReplaceWith("matMat(DenseMatrix.fromRows(a), DenseMatrix.fromRows(b), backend)"),
         DeprecationLevel.WARNING,
     )
     public fun matMat(a: Array<DoubleArray>, b: Array<DoubleArray>, backend: LinAlgBackend = Backends.default()): Array<DoubleArray> {
-        require(b.isNotEmpty() && b[0].isNotEmpty()) { "matMat: пустая матрица B" }
+        require(b.isNotEmpty() && b[0].isNotEmpty()) { "matMat: matrix B is empty" }
         return matMat(rows(a, "matMat"), DenseMatrix.fromRows(b), backend).toRows()
     }
 
-    /** Произведение A^T diag(w) A для A: m x n, w: m -> симметричная n x n. */
+    /** Product A^T diag(w) A for A: m x n, w: m -> symmetric n x n. */
     @Deprecated(
-        "Используйте перегрузку с DenseMatrix",
+        "Use the DenseMatrix overload",
         ReplaceWith("atWa(DenseMatrix.fromRows(a), w, backend)"),
         DeprecationLevel.WARNING,
     )
     public fun atWa(a: Array<DoubleArray>, w: DoubleArray, backend: LinAlgBackend = Backends.default()): Array<DoubleArray> =
         atWa(rows(a, "atWa"), w, backend).toRows()
 
-    /** Поэлементная сумма матриц A + s*B (одинаковые размеры). */
+    /** Element-wise sum A + s*B (matrices of the same shape). */
     @Deprecated(
-        "Используйте перегрузку с DenseMatrix",
+        "Use the DenseMatrix overload",
         ReplaceWith("addScaled(DenseMatrix.fromRows(a), DenseMatrix.fromRows(b), s, backend)"),
         DeprecationLevel.WARNING,
     )
     public fun addScaled(a: Array<DoubleArray>, b: Array<DoubleArray>, s: Double, backend: LinAlgBackend = Backends.default()): Array<DoubleArray> {
-        require(a.size == b.size) { "addScaled: несогласованное число строк A(${a.size}) и B(${b.size})" }
+        require(a.size == b.size) { "addScaled: row counts of A(${a.size}) and B(${b.size}) do not match" }
         return addScaled(DenseMatrix.fromRows(a), DenseMatrix.fromRows(b), s, backend).toRows()
     }
 
     /**
-     * Решение плотной СЛАУ A x = b; контракт тот же, что у перегрузки над [DenseMatrix],
-     * включая проверку нечислового входа и постпроверку невязки.
-     * @throws IllegalStateException при вырожденности.
+     * Solves the dense linear system A x = b; same contract as the [DenseMatrix] overload,
+     * including the non-finite input check and the residual post-check.
+     * @throws IllegalStateException on singularity.
      */
     public fun solve(a: Array<DoubleArray>, b: DoubleArray, backend: LinAlgBackend = Backends.default()): DoubleArray {
-        require(a.isNotEmpty() && a[0].isNotEmpty()) { "solve: пустая матрица A" }
-        require(a[0].size == a.size) { "solve: требуется квадратная A, получено ${a.size}x${a[0].size}" }
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "solve: matrix A is empty" }
+        require(a[0].size == a.size) { "solve: matrix A must be square, got ${a.size}x${a[0].size}" }
         for (i in a.indices) require(a[i].size == a.size) {
-            "solve: рваная матрица A — строка $i длины ${a[i].size}, ожидалось ${a.size}"
+            "solve: matrix A is ragged — row $i has length ${a[i].size}, expected ${a.size}"
         }
         return solve(DenseMatrix.fromRows(a), b, backend)
     }
 
-    /** Решает A x = b и оценивает прямую ошибку; контракт тот же, что у перегрузки над [DenseMatrix]. */
+    /** Solves A x = b and estimates the forward error; same contract as the [DenseMatrix] overload. */
     public fun solveDiagnosed(
         a: Array<DoubleArray>,
         b: DoubleArray,
@@ -354,53 +354,53 @@ public object LinearAlgebra {
     ): DiagnosedSolution = solveDiagnosed(rows(a, "solveDiagnosed"), b, backend, source, tolerance)
 
     /**
-     * Разложение Холецкого над массивом строк; контракт тот же, что у перегрузки над [DenseMatrix].
-     * @return нижнетреугольная L или null, если A не положительно определена.
+     * Cholesky factorization over an array of rows; same contract as the [DenseMatrix] overload.
+     * @return lower-triangular L, or null if A is not positive definite.
      */
     @Deprecated(
-        "Используйте перегрузку с DenseMatrix",
+        "Use the DenseMatrix overload",
         ReplaceWith("cholesky(DenseMatrix.fromRows(a))"),
         DeprecationLevel.WARNING,
     )
     public fun cholesky(a: Array<DoubleArray>): Array<DoubleArray>? = cholesky(rows(a, "cholesky"))?.toRows()
 
-    /** Симметрия: max|A - A^T|; требует непустую квадратную нерваную A. */
+    /** Asymmetry: max|A - A^T|; requires a non-empty, square, non-ragged A. */
     public fun maxAsymmetry(a: Array<DoubleArray>): Double {
-        require(a.isNotEmpty() && a[0].isNotEmpty()) { "maxAsymmetry: пустая матрица A" }
-        require(a[0].size == a.size) { "maxAsymmetry: требуется квадратная A, получено ${a.size}x${a[0].size}" }
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "maxAsymmetry: matrix A is empty" }
+        require(a[0].size == a.size) { "maxAsymmetry: matrix A must be square, got ${a.size}x${a[0].size}" }
         for (i in a.indices) require(a[i].size == a.size) {
-            "maxAsymmetry: рваная матрица A — строка $i длины ${a[i].size}, ожидалось ${a.size}"
+            "maxAsymmetry: matrix A is ragged — row $i has length ${a[i].size}, expected ${a.size}"
         }
         return DenseOps.maxAsymmetry(a)
     }
 
-    // --- Перегрузки с NumericsContext: реализация линейной алгебры из контекста ---
+    // --- NumericsContext overloads: backend taken from the context ------------
 
-    /** То же, что [matVec], с реализацией линейной алгебры из [context]. */
+    /** Same as [matVec], with the backend taken from [context]. */
     public fun matVec(a: DenseMatrix, x: DoubleArray, context: NumericsContext): DoubleArray =
         matVec(a, x, context.backend)
 
-    /** То же, что [matTransVec], с реализацией линейной алгебры из [context]. */
+    /** Same as [matTransVec], with the backend taken from [context]. */
     public fun matTransVec(a: DenseMatrix, y: DoubleArray, context: NumericsContext): DoubleArray =
         matTransVec(a, y, context.backend)
 
-    /** То же, что [matMat], с реализацией линейной алгебры из [context]. */
+    /** Same as [matMat], with the backend taken from [context]. */
     public fun matMat(a: DenseMatrix, b: DenseMatrix, context: NumericsContext): DenseMatrix =
         matMat(a, b, context.backend)
 
-    /** То же, что [atWa], с реализацией линейной алгебры из [context]. */
+    /** Same as [atWa], with the backend taken from [context]. */
     public fun atWa(a: DenseMatrix, w: DoubleArray, context: NumericsContext): DenseMatrix =
         atWa(a, w, context.backend)
 
-    /** То же, что [addScaled], с реализацией линейной алгебры из [context]. */
+    /** Same as [addScaled], with the backend taken from [context]. */
     public fun addScaled(a: DenseMatrix, b: DenseMatrix, s: Double, context: NumericsContext): DenseMatrix =
         addScaled(a, b, s, context.backend)
 
-    /** То же, что [solve], с реализацией линейной алгебры из [context]. */
+    /** Same as [solve], with the backend taken from [context]. */
     public fun solve(a: DenseMatrix, b: DoubleArray, context: NumericsContext): DoubleArray =
         solve(a, b, context.backend)
 
-    /** То же, что [solveDiagnosed], с реализацией линейной алгебры из [context]. */
+    /** Same as [solveDiagnosed], with the backend taken from [context]. */
     public fun solveDiagnosed(
         a: DenseMatrix,
         b: DoubleArray,
@@ -409,7 +409,7 @@ public object LinearAlgebra {
         tolerance: Double = Conditioning.INVERSION_RESIDUAL_TOLERANCE,
     ): DiagnosedSolution = solveDiagnosed(a, b, context.backend, source, tolerance)
 
-    /** То же, что [cholesky], с реализацией линейной алгебры из [context]. */
+    /** Same as [cholesky], with the backend taken from [context]. */
     public fun cholesky(a: DenseMatrix, context: NumericsContext): DenseMatrix? =
         cholesky(a, context.backend)
 }

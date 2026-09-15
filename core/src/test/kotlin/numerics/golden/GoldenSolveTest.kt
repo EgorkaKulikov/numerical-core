@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 import kotlin.test.assertEquals
 
-/** Эталон `solve.json`: `solve`, `relativeBackwardError`, `solveDiagnosed().forwardError`. */
+/** Golden reference `solve.json`: `solve`, `relativeBackwardError`, `solveDiagnosed().forwardError`. */
 @Tag("fast")
 class GoldenSolveTest {
 
@@ -42,7 +42,7 @@ class GoldenSolveTest {
     }
 
     companion object {
-        /** Тип — точно; числовые поля — относительно `tol` (зависят от LAPACK). */
+        /** The type must match exactly; numeric fields are compared relative to `tol` (they depend on LAPACK). */
         fun assertForwardErrorClose(exp: Map<String, Any?>, got: ForwardError, tol: Double, label: String) {
             val expType = exp["type"] as String
             val gotType = when (got) {

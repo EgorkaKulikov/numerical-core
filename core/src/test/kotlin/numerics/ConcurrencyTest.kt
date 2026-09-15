@@ -20,25 +20,25 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * Потокобезопасность: реализации BLAS/LAPACK, реестр реализаций, квадратура и контекст
- * не имеют изменяемого общего состояния — параллельные вызовы дают те же ответы, что и
- * последовательные, а ленивые синглтоны создаются ровно один раз.
+ * Thread safety: BLAS/LAPACK implementations, the implementation registry, quadrature and the context
+ * have no mutable shared state — concurrent calls return the same answers as
+ * sequential ones, and lazy singletons are created exactly once.
  *
- * Для реализации на Java результаты совпадают побитово; нативные многопоточные библиотеки
- * (Accelerate, OpenBLAS, MKL) воспроизводят результат с точностью до порядка редукций —
- * расхождение не превышает нескольких единиц младшего разряда, поэтому для них результаты
- * сравниваются с относительным допуском [nativeTol] (см. `docs/ТОЧНОСТЬ.md`,
- * «Воспроизводимость на многопоточных реализациях»).
+ * For the Java implementation the results match bit for bit; native multithreaded libraries
+ * (Accelerate, OpenBLAS, MKL) reproduce the result only up to the reduction order —
+ * the discrepancy does not exceed a few ulps, so for them the results
+ * are compared with the relative tolerance [nativeTol] (see `docs/ACCURACY.md`, section
+ * "Reproducibility on multithreaded implementations").
  */
 @Tag("fast")
 class ConcurrencyTest {
 
     private val timeout: Duration = Duration.ofSeconds(60)
 
-    /** Допуск для нативных реализаций: относительно `max(‖expected‖∞, 1)`. */
+    /** Tolerance for native implementations, relative to `max(‖expected‖∞, 1)`. */
     private val nativeTol: Double = 1e-13
 
-    /** Запускает [tasks] на пуле из [threads] потоков со стартом по общему сигналу; возвращает результаты. */
+    /** Runs [tasks] on a pool of [threads] threads started by a shared signal; returns the results. */
     private fun <T> runAll(threads: Int, tasks: List<() -> T>): List<T> {
         val pool = Executors.newFixedThreadPool(threads)
         val start = CountDownLatch(1)
@@ -64,14 +64,14 @@ class ConcurrencyTest {
     }
 
     /**
-     * Сравнивает результат из рабочего потока с результатом главного потока: побитово для
-     * реализации на Java, с относительным допуском [nativeTol] для нативных реализаций.
+     * Compares the result from a worker thread with the main-thread result: bit for bit for
+     * the Java implementation, with relative tolerance [nativeTol] for native implementations.
      */
     private fun assertSameResult(expected: DoubleArray, actual: DoubleArray, backend: LinAlgBackend, label: String) {
         val tag = "$label [${backend.name}]"
-        assertTrue(expected.size == actual.size, "$tag: размер ${actual.size} != ${expected.size}")
+        assertTrue(expected.size == actual.size, "$tag: size ${actual.size} != ${expected.size}")
         if (!backend.isNative) {
-            assertTrue(expected.contentEquals(actual), "$tag: результат из потока отличается побитово")
+            assertTrue(expected.contentEquals(actual), "$tag: result from the thread differs bitwise")
             return
         }
         var maxDiff = 0.0
@@ -81,8 +81,8 @@ class ConcurrencyTest {
             scale = maxOf(scale, abs(expected[i]))
         }
         val rel = maxDiff / scale
-        if (maxDiff != 0.0) println("$tag: не побитово, max|Δ| = $maxDiff (отн. $rel)")
-        assertTrue(rel <= nativeTol, "$tag: относительное расхождение $rel > $nativeTol")
+        if (maxDiff != 0.0) println("$tag: not bitwise equal, max|Δ| = $maxDiff (rel. $rel)")
+        assertTrue(rel <= nativeTol, "$tag: relative discrepancy $rel > $nativeTol")
     }
 
     private fun perBackend(name: String, body: (LinAlgBackend) -> Unit): List<DynamicTest> =
@@ -96,7 +96,7 @@ class ConcurrencyTest {
             val expected = LinearAlgebra.solve(a, rhs, b)
             val results = runAll(8, List(8) { { List(20) { LinearAlgebra.solve(a, rhs, b) } } })
             results.forEachIndexed { t, list ->
-                list.forEachIndexed { k, x -> assertSameResult(expected, x, b, "поток $t, итерация $k") }
+                list.forEachIndexed { k, x -> assertSameResult(expected, x, b, "thread $t, iteration $k") }
             }
         }
     }
@@ -128,12 +128,12 @@ class ConcurrencyTest {
     fun backendRegistryReturnsSingletonsUnderContention() {
         assertTimeoutPreemptively(timeout) {
             val javas = runAll(16, List(16) { { Backends.java() } })
-            javas.forEach { assertSame(javas[0], it, "java() обязан кэшировать экземпляр") }
+            javas.forEach { assertSame(javas[0], it, "java() must cache the instance") }
             val defaults = runAll(16, List(16) { { Backends.default() } })
-            defaults.forEach { assertSame(defaults[0], it, "default() обязан кэшировать экземпляр") }
+            defaults.forEach { assertSame(defaults[0], it, "default() must cache the instance") }
             if (Backends.isNativeAvailable()) {
                 val natives = runAll(16, List(16) { { Backends.native() } })
-                natives.forEach { assertSame(natives[0], it, "native() обязан кэшировать экземпляр") }
+                natives.forEach { assertSame(natives[0], it, "native() must cache the instance") }
             }
         }
     }
@@ -148,7 +148,7 @@ class ConcurrencyTest {
             val results = runAll(8, List(8) { { DoubleArray(50) { q.integrate(bp, f) } } })
             results.forEachIndexed { t, arr ->
                 arr.forEach { r ->
-                    assertTrue(r.toRawBits() == expected.toRawBits(), "поток $t: $r vs $expected")
+                    assertTrue(r.toRawBits() == expected.toRawBits(), "thread $t: $r vs $expected")
                 }
             }
         }

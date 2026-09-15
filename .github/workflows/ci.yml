@@ -1,18 +1,18 @@
-# Непрерывная интеграция numerical-core.
+# Continuous integration for numerical-core.
 #
-# Три задачи:
-#   * test — тесты на матрице «операционная система × реализация BLAS/LAPACK».
-#     Реализация задаётся свойством `numerics.backend` (java — чистая JVM-реализация
-#     netlib F2J, native — системные BLAS/LAPACK через JNI). На Ubuntu системные
-#     библиотеки не предустановлены, поэтому для варианта native ставится
-#     libopenblas-dev: он даёт libblas.so.3 и liblapack.so.3 через alternatives.
-#     Без них netlib молча откатывается на F2J — это ловит тест
-#     BackendSpiTest.defaultMatchesRequestedProperty, который сверяет `isNative`
-#     реализации по умолчанию с запрошенным значением свойства.
-#   * publish-check — публикация в локальный репозиторий Maven и проверка состава
-#     артефакта и его POM.
-#   * publish — публикация обоих артефактов в GitHub Packages. Выполняется только
-#     при отправке тега вида vX.Y.Z и после успеха двух предыдущих задач.
+# Three jobs:
+#   * test — tests on the matrix "operating system × BLAS/LAPACK implementation".
+#     The implementation is selected by the `numerics.backend` property (java — the pure-JVM
+#     netlib F2J implementation, native — system BLAS/LAPACK via JNI). On Ubuntu the system
+#     libraries are not preinstalled, so the native variant installs
+#     libopenblas-dev: it provides libblas.so.3 and liblapack.so.3 via alternatives.
+#     Without them netlib silently falls back to F2J — this is caught by the test
+#     BackendSpiTest.defaultMatchesRequestedProperty, which compares `isNative` of the
+#     default implementation with the requested property value.
+#   * publish-check — publication to the local Maven repository and a check of the
+#     artifact contents and its POM.
+#   * publish — publication of both artifacts to GitHub Packages. Runs only
+#     when a vX.Y.Z tag is pushed and after the two previous jobs succeed.
 name: CI
 
 on:
@@ -21,7 +21,7 @@ on:
     tags: ['v*']
   pull_request:
 
-# Новый запуск на той же ветке отменяет предыдущий незавершённый.
+# A new run on the same branch cancels the previous unfinished one.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -31,7 +31,7 @@ permissions:
 
 jobs:
   test:
-    name: Тесты (${{ matrix.os }}, ${{ matrix.backend }})
+    name: Tests (${{ matrix.os }}, ${{ matrix.backend }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -41,34 +41,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Установка JDK 21
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Настройка Gradle с кэшем
+      - name: Set up Gradle with cache
         uses: gradle/actions/setup-gradle@v4
 
-      # На macOS системные BLAS/LAPACK даёт Accelerate, ничего ставить не нужно.
-      - name: Установка системных BLAS/LAPACK (Ubuntu, native)
+      # On macOS the system BLAS/LAPACK is provided by Accelerate; nothing needs to be installed.
+      - name: Install system BLAS/LAPACK (Ubuntu, native)
         if: matrix.os == 'ubuntu-latest' && matrix.backend == 'native'
         run: sudo apt-get update && sudo apt-get install -y libopenblas-dev liblapack-dev
 
-      - name: Тесты на реализации ${{ matrix.backend }}
+      - name: Tests on the ${{ matrix.backend }} implementation
         run: ./gradlew :numerical-core:test :numerical-core-openblas:test -Dnumerics.backend=${{ matrix.backend }} --no-daemon
         env:
-          # Ограничение потоков системного OpenBLAS (как в модуле openblas): многопоточный
-          # dgetrf на стандартном стеке потока валил тестовую JVM (exit 139).
+          # Limit the threads of the system OpenBLAS (as in the openblas module): multithreaded
+          # dgetrf on the default thread stack crashed the test JVM (exit 139).
           OPENBLAS_NUM_THREADS: 4
 
-      # Отчёт о покрытии и его планка снимаются один раз, на самом воспроизводимом
-      # варианте матрицы (Ubuntu, чистая JVM-реализация).
-      - name: Покрытие (Kover) и его планка
+      # The coverage report and its bar are taken once, on the most reproducible
+      # matrix variant (Ubuntu, pure-JVM implementation).
+      - name: Coverage (Kover) and its bar
         if: matrix.os == 'ubuntu-latest' && matrix.backend == 'java'
         run: ./gradlew :numerical-core:koverXmlReport :numerical-core:koverVerify -Dnumerics.backend=java --no-daemon
 
-      - name: Отчёты тестов и покрытия
+      - name: Test and coverage reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -81,26 +81,26 @@ jobs:
           if-no-files-found: ignore
 
   publish-check:
-    name: Проверка публикации артефакта
+    name: Artifact publication check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Установка JDK 21
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Настройка Gradle с кэшем
+      - name: Set up Gradle with cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Публикация в локальный репозиторий Maven
+      - name: Publish to the local Maven repository
         run: ./gradlew publishToMavenLocal --no-daemon
 
-      # Координаты и версия читаются из gradle.properties, чтобы проверка не
-      # расходилась со сборкой при смене версии.
-      - name: Проверка состава артефакта и POM
+      # Coordinates and version are read from gradle.properties so that the check does not
+      # diverge from the build when the version changes.
+      - name: Check artifact contents and POM
         run: |
           set -eu
           group=$(grep '^group=' gradle.properties | cut -d= -f2 | tr . /)
@@ -108,34 +108,34 @@ jobs:
           dir="$HOME/.m2/repository/$group/numerical-core/$version"
           ls -la "$dir"
           for f in "numerical-core-$version.jar" "numerical-core-$version-sources.jar" "numerical-core-$version.pom"; do
-            test -s "$dir/$f" || { echo "отсутствует $dir/$f"; exit 1; }
+            test -s "$dir/$f" || { echo "missing $dir/$f"; exit 1; }
           done
           pom="$dir/numerical-core-$version.pom"
-          # Зависимость на netlib обязана быть объявлена: без неё программа, подключившая
-          # библиотеку, не получит BLAS/LAPACK во время выполнения.
-          grep -q 'dev.ludovic.netlib' "$pom" || { echo "POM не объявляет зависимость dev.ludovic.netlib"; exit 1; }
-          # Единственная реализация — netlib: иных групп зависимостей в POM быть не должно.
+          # The netlib dependency must be declared: without it a program that depends on
+          # the library gets no BLAS/LAPACK at runtime.
+          grep -q 'dev.ludovic.netlib' "$pom" || { echo "POM does not declare the dev.ludovic.netlib dependency"; exit 1; }
+          # netlib is the only implementation: no other dependency groups may appear in the POM.
           groupId=$(grep '^group=' gradle.properties | cut -d= -f2)
           unexpected=$(grep -o '<groupId>[^<]*</groupId>' "$pom" | sort -u \
             | grep -v -e "$groupId" -e 'dev.ludovic.netlib' -e 'org.jetbrains.kotlin' || true)
           if [ -n "$unexpected" ]; then
-            echo "POM объявляет неожиданные зависимости: $unexpected"; exit 1
+            echo "POM declares unexpected dependencies: $unexpected"; exit 1
           fi
-          echo "артефакт $group:numerical-core:$version опубликован корректно"
-          # Второй артефакт: упакованная OpenBLAS. Обязан зависеть от numerical-core и от openblas-platform.
+          echo "artifact $group:numerical-core:$version published correctly"
+          # Second artifact: bundled OpenBLAS. Must depend on numerical-core and on openblas-platform.
           dir2="$HOME/.m2/repository/$group/numerical-core-openblas/$version"
           ls -la "$dir2"
           for f in "numerical-core-openblas-$version.jar" "numerical-core-openblas-$version-sources.jar" "numerical-core-openblas-$version.pom"; do
-            test -s "$dir2/$f" || { echo "отсутствует $dir2/$f"; exit 1; }
+            test -s "$dir2/$f" || { echo "missing $dir2/$f"; exit 1; }
           done
           pom2="$dir2/numerical-core-openblas-$version.pom"
-          grep -q '<artifactId>numerical-core</artifactId>' "$pom2" || { echo "POM openblas не объявляет зависимость numerical-core"; exit 1; }
-          grep -q 'openblas-platform' "$pom2" || { echo "POM openblas не объявляет зависимость openblas-platform"; exit 1; }
-          echo "артефакт $group:numerical-core-openblas:$version опубликован корректно"
+          grep -q '<artifactId>numerical-core</artifactId>' "$pom2" || { echo "openblas POM does not declare the numerical-core dependency"; exit 1; }
+          grep -q 'openblas-platform' "$pom2" || { echo "openblas POM does not declare the openblas-platform dependency"; exit 1; }
+          echo "artifact $group:numerical-core-openblas:$version published correctly"
 
   publish:
-    name: Публикация в GitHub Packages
-    # Только по тегу версии: отправка в ветки артефакты не публикует.
+    name: Publish to GitHub Packages
+    # Only on a version tag: pushes to branches do not publish artifacts.
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [test, publish-check]
     runs-on: ubuntu-latest
@@ -145,17 +145,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Установка JDK 21
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 21
 
-      - name: Настройка Gradle с кэшем
+      - name: Set up Gradle with cache
         uses: gradle/actions/setup-gradle@v4
 
-      # Учётные данные для GitHub Packages: имя запустившего и встроенный токен рабочего процесса.
-      - name: Публикация обоих артефактов в GitHub Packages
+      # Credentials for GitHub Packages: the actor's name and the workflow's built-in token.
+      - name: Publish both artifacts to GitHub Packages
         run: ./gradlew publishAllPublicationsToGitHubPackagesRepository --no-daemon
         env:
           GITHUB_ACTOR: ${{ github.actor }}

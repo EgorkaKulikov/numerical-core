@@ -1,30 +1,31 @@
-# Эталоны поведения numerical-core 0.1.0
+# Golden behavior references of numerical-core 0.1.0
 
-Назначение: зафиксировать фактическое поведение публичного API версии 0.1.0 (решение СЛАУ,
-матричные операции, разложение Холецкого, обусловленность, собственные значения, квадратура
-Гаусса–Лежандра, чистые функции `Measured`/`ForwardError`/`orders`), чтобы при переработке
-библиотеки регрессии обнаруживались сравнением с эталоном, а не только тестами на свойства.
-Входные данные детерминированы (`GoldenInputs`, `java.util.Random` с фиксированными seed).
+Purpose: to record the actual behavior of the public API of version 0.1.0 (linear solves,
+matrix operations, Cholesky factorization, conditioning, eigenvalues, Gauss–Legendre
+quadrature, the pure functions `Measured`/`ForwardError`/`orders`) so that regressions
+introduced while reworking the library are detected by comparison with the golden reference,
+not only by property tests. The inputs are deterministic (`GoldenInputs`, `java.util.Random`
+with fixed seeds).
 
-Формат: JSON; каждое значение `Double` записано шестнадцатеричной строкой из 16 символов
-(`toRawBits()`), то есть без потери точности. Поле `generatedWith` хранит версию, имя
-реализации BLAS/LAPACK и дату формирования. Чтение и запись выполняются классом `GoldenIo`
-без внешних зависимостей.
+Format: JSON; every `Double` value is written as a 16-character hexadecimal string
+(`toRawBits()`), i.e. without loss of precision. The `generatedWith` field stores the version,
+the name of the BLAS/LAPACK implementation and the generation date. Reading and writing are
+done by the `GoldenIo` class without external dependencies.
 
-Эталоны формируются заново командой `./gradlew :numerical-core:regenerateGolden` (тег
-`golden-generate`; в обычные задачи `test` и `fastTest` не входит). Это допускается только при
-намеренном изменении поведения, с описанием причины в сообщении коммита.
+The references are regenerated with `./gradlew :numerical-core:regenerateGolden` (tag
+`golden-generate`; not part of the regular `test` and `fastTest` tasks). This is allowed only
+on a deliberate behavior change, with the reason described in the commit message.
 
-Допуски проверок (`Golden*Test`, тег `fast`): `1e-12` относительно по норме
-`‖got−exp‖∞ / max(‖exp‖∞, 1)`; `1e-6` для матриц Гильберта (`hilbert-*` в `solve.json` и
-`conditioning.json`), поскольку при n=8 число обусловленности составляет около 1e10 и
-различные корректные реализации LU-разложения расходятся на этом уровне; `pure.json`
-сравнивается побитово (`assertBits`), `null == null`.
+Check tolerances (`Golden*Test`, tag `fast`): `1e-12` relative in the norm
+`‖got−exp‖∞ / max(‖exp‖∞, 1)`; `1e-6` for Hilbert matrices (`hilbert-*` in `solve.json` and
+`conditioning.json`), because at n=8 the condition number is about 1e10 and different
+correct LU implementations diverge at that level; `pure.json` is compared bit for bit
+(`assertBits`), `null == null`.
 
-Поле `inversionResidual` сравнивается по порядку величины (либо оба значения лежат ниже
-уровня шума `100·ε·condInf`) и по признаку достоверности `isReliable`, а не относительно: на
-плохо обусловленных матрицах эта величина является шумом округления, зависящим от
-реализации LAPACK и порядка операций.
+The `inversionResidual` field is compared by order of magnitude (or both values lie below the
+noise level `100·ε·condInf`) and by the `isReliable` flag rather than relatively: on
+ill-conditioned matrices this quantity is rounding noise that depends on the LAPACK
+implementation and the order of operations.
 
-Эталон `orders` для входа с бесконечностью обновлён в 1.0.0: бесконечная погрешность даёт
-`NaN`, как и нулевая.
+The `orders` reference for the input containing an infinity was updated in 1.0.0: an infinite
+error yields `NaN`, as a zero one does.

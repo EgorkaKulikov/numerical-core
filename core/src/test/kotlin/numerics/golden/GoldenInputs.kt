@@ -11,12 +11,12 @@ import kotlin.math.pow
 import kotlin.math.sin
 
 /**
- * Детерминированные входы для golden-эталонов. Каждый генератор создаёт **свой**
- * `Random` с seed, зависящим только от `n`, поэтому результат не зависит от порядка вызовов.
+ * Deterministic inputs for the golden references. Each generator creates its **own**
+ * `Random` with a seed that depends only on `n`, so the result is independent of call order.
  */
 object GoldenInputs {
 
-    /** Диагонально доминирующая: `a[i][j] ∈ (−1, 1)`, `a[i][i] += n`. */
+    /** Diagonally dominant: `a[i][j] ∈ (−1, 1)`, `a[i][i] += n`. */
     fun dd(n: Int): Array<DoubleArray> {
         val r = Random(1000L + n)
         val a = Array(n) { DoubleArray(n) }
@@ -25,7 +25,7 @@ object GoldenInputs {
         return a
     }
 
-    /** `dd(n)` с циклическим сдвигом строк на `n/2` — заставляет LU переставлять строки. */
+    /** `dd(n)` with rows cyclically shifted by `n/2` — forces LU to pivot rows. */
     fun perm(n: Int): Array<DoubleArray> {
         val a = dd(n)
         val s = n / 2
@@ -34,7 +34,7 @@ object GoldenInputs {
 
     fun hilbert(n: Int): Array<DoubleArray> = Array(n) { i -> DoubleArray(n) { j -> 1.0 / (i + j + 1) } }
 
-    /** Симметричная: `(b + bᵀ)/2`, в `[i][j]` и `[j][i]` записано одно и то же значение. */
+    /** Symmetric: `(b + bᵀ)/2`, with the very same value stored at `[i][j]` and `[j][i]`. */
     fun sym(n: Int): Array<DoubleArray> {
         val r = Random(1000L + n)
         val b = Array(n) { DoubleArray(n) }
@@ -48,7 +48,7 @@ object GoldenInputs {
         return a
     }
 
-    /** SPD: `Bᵀ·B + n·I` через `LinearAlgebra.atWa(b, 1)`. */
+    /** SPD: `Bᵀ·B + n·I` via `LinearAlgebra.atWa(b, 1)`. */
     fun spd(n: Int): Array<DoubleArray> {
         val r = Random(1000L + n)
         val b = Array(n) { DoubleArray(n) }
@@ -82,12 +82,12 @@ object GoldenInputs {
         "hilbert" -> hilbert(n)
         "sym" -> sym(n)
         "spd" -> spd(n)
-        else -> error("Неизвестный класс матриц: $cls")
+        else -> error("Unknown matrix class: $cls")
     }
 
-    // ---- Перечни случаев (общие для генератора и проверок) ---------------------
+    // ---- Case lists (shared by the generator and the checks) --------------------
 
-    /** Пара (класс, n); ключ случая — `"$cls-$n"`. */
+    /** A (class, n) pair; the case key is `"$cls-$n"`. */
     data class MatrixCase(val cls: String, val n: Int) {
         val key: String get() = "$cls-$n"
         fun matrix(): Array<DoubleArray> = matrixOf(cls, n)
@@ -109,13 +109,13 @@ object GoldenInputs {
 
     val conditionSymmetricCases: List<MatrixCase> = listOf(1, 2, 3, 5, 8, 16, 32).map { MatrixCase("spd", it) }
 
-    /** Допуск для сравнения результатов LU-семейства: матрицы Гильберта — грубее. */
+    /** Tolerance for comparing results of the LU family: coarser for Hilbert matrices. */
     fun tolFor(case: MatrixCase): Double = if (case.cls == "hilbert") HILBERT_TOL else DEFAULT_TOL
 
     const val DEFAULT_TOL = 1e-12
     const val HILBERT_TOL = 1e-6
 
-    // ---- Квадратура -------------------------------------------------------------
+    // ---- Quadrature -------------------------------------------------------------
 
     val referenceOrders: List<Int> = (1..32).toList()
 
@@ -144,7 +144,7 @@ object GoldenInputs {
         }
     }
 
-    // ---- Чистые функции -------------------------------------------------------
+    // ---- Pure functions ---------------------------------------------------------
 
     val feConds: List<Double> = listOf(1.0, 1e3, 1e8, 1e12, 1e16, Double.POSITIVE_INFINITY)
     val feResiduals: List<Double> = listOf(0.0, 1e-12, 1e-6)
@@ -202,7 +202,7 @@ object GoldenInputs {
         RatioCase(0.0, 1.0),
     )
 
-    // ---- Сериализация типов результатов -----------------------------------------
+    // ---- Serialization of result types ------------------------------------------
 
     fun conditionToJson(c: ConditionEstimate): Map<String, Any?> = linkedMapOf(
         "condInf" to dbl(c.condInf),

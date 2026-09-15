@@ -7,20 +7,20 @@ import numerics.backend.LinAlgBackend
 import numerics.backend.MatrixNorm
 
 /**
- * Оценка числа обусловленности плотной матрицы вместе с признаком её достоверности.
+ * Condition-number estimate of a dense matrix together with a reliability flag.
  *
- * Число обусловленности само вычисляется численно, и на почти вырожденных матрицах
- * его значение недостоверно: прямая ошибка обращения растёт как `cond(A)·ε`, и при
- * `cond` порядка `1/ε` в столбцах `A⁻¹` не остаётся верных разрядов. Невязка
- * `‖A·A⁻¹ − I‖∞` измеряет именно эту потерю, поэтому оценка сопровождается ею,
- * а достоверность проверяется через [isReliable].
+ * The condition number is itself computed numerically, and on nearly singular matrices
+ * its value is unreliable: the forward error of the inversion grows like `cond(A)·ε`, and for
+ * `cond` of order `1/ε` no correct digits remain in the columns of `A⁻¹`. The residual
+ * `‖A·A⁻¹ − I‖∞` measures exactly this loss, so the estimate is accompanied by it,
+ * and reliability is checked via [isReliable].
  *
- * @property condInf оценка числа обусловленности; [Double.POSITIVE_INFINITY], если
- *   матрица признана вырожденной.
- * @property inversionResidual невязка обращения `‖A·A⁻¹ − I‖∞`; [Double.POSITIVE_INFINITY],
- *   если обращение не удалось; `0.0`, если оценка получена без обращения
+ * @property condInf the condition-number estimate; [Double.POSITIVE_INFINITY] if
+ *   the matrix was found to be singular.
+ * @property inversionResidual the inversion residual `‖A·A⁻¹ − I‖∞`; [Double.POSITIVE_INFINITY]
+ *   if the inversion failed; `0.0` if the estimate was obtained without inversion
  *   ([Conditioning.conditionEstimate]).
- * @property tolerance порог невязки, при котором оценка считается достоверной; строго положителен.
+ * @property tolerance the residual threshold below which the estimate is considered reliable; strictly positive.
  */
 public data class ConditionEstimate(
     val condInf: Double,
@@ -28,64 +28,64 @@ public data class ConditionEstimate(
     val tolerance: Double,
 ) {
     init {
-        require(tolerance > 0.0) { "ConditionEstimate: требуется tolerance > 0, получено $tolerance" }
+        require(tolerance > 0.0) { "ConditionEstimate: tolerance must be > 0, got $tolerance" }
     }
 
-    /** Достоверна ли оценка: значение конечно и невязка обращения не превышает [tolerance]. */
+    /** Whether the estimate is reliable: the value is finite and the inversion residual does not exceed [tolerance]. */
     val isReliable: Boolean
         get() = condInf.isFinite() && inversionResidual <= tolerance
 
-    /** [condInf], если оценка достоверна, иначе `null`. */
+    /** [condInf] if the estimate is reliable, otherwise `null`. */
     public fun valueOrNull(): Double? = if (isReliable) condInf else null
 }
 
 /**
- * Способ получения числа обусловленности, по которому [LinearAlgebra.solveDiagnosed]
- * строит границу прямой ошибки. Варианты различаются гарантиями, стоимостью и
- * требованиями к матрице.
+ * How the condition number is obtained when [LinearAlgebra.solveDiagnosed]
+ * builds the forward-error bound. The variants differ in guarantees, cost and
+ * requirements on the matrix.
  */
 public enum class ConditionSource {
     /**
-     * Явное обращение матрицы ([Conditioning.conditionInf]): O(n³), без требований к `A`,
-     * достоверность контролируется невязкой обращения.
+     * Explicit matrix inversion ([Conditioning.conditionInf]): O(n³), no requirements on `A`,
+     * reliability is controlled by the inversion residual.
      */
     INVERSION,
 
     /**
-     * Спектр симметричной матрицы ([Conditioning.conditionSymmetric]): требует симметричной `A`;
-     * различает вырожденную матрицу (`min|λ| = 0`) и матрицу с большим, но конечным `cond`.
+     * Spectrum of a symmetric matrix ([Conditioning.conditionSymmetric]): requires symmetric `A`;
+     * distinguishes a singular matrix (`min|λ| = 0`) from a matrix with a large but finite `cond`.
      */
     SYMMETRIC_SPECTRUM,
 
     /**
-     * Оценка LAPACK по LU-разложению ([Conditioning.conditionEstimate]): O(n²) сверх
-     * разложения, без требований к `A`; даёт оценку снизу с точностью до множителя порядка единиц.
+     * LAPACK estimate from the LU factorization ([Conditioning.conditionEstimate]): O(n²) on top of
+     * the factorization, no requirements on `A`; gives a lower bound within a factor of a few units.
      */
     ESTIMATE,
 }
 
 /**
- * Оценка относительной прямой ошибки решения СЛАУ вместе с суждением о том,
- * существует ли она и можно ли ей верить.
+ * Estimate of the relative forward error of a linear-system solution together with a verdict
+ * on whether it exists and whether it can be trusted.
  *
- * Обратная ошибка `ω = ‖Ax − b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)` показывает, какую систему
- * метод решил точно; у LU с частичным выбором она мала и на почти вырожденной матрице.
- * Прямая ошибка `‖x − x*‖∞ / ‖x*‖∞` ограничена произведением `cond(A)·ω` и на
- * плохо обусловленной системе может съесть все значащие цифры. Малая обратная
- * ошибка сама по себе не означает точного результата.
+ * The backward error `ω = ‖Ax − b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)` shows which system the method
+ * solved exactly; for LU with partial pivoting it is small even on a nearly singular matrix.
+ * The forward error `‖x − x*‖∞ / ‖x*‖∞` is bounded by the product `cond(A)·ω` and on an
+ * ill-conditioned system may consume all significant digits. A small backward error
+ * by itself does not imply an accurate result.
  *
- * Три режима разделены конструкторами: получить число можно только явным
- * сопоставлением либо через [relativeBoundOrNull], который возвращает `null`, где числа нет.
+ * The three modes are separated by constructors: a number can be obtained only by explicit
+ * pattern matching or via [relativeBoundOrNull], which returns `null` where there is no number.
  */
 public sealed interface ForwardError {
-    /** Измеренная относительная обратная ошибка; доступна во всех режимах. */
+    /** The measured relative backward error; available in all modes. */
     public val backwardError: Double
 
     /**
-     * Оценка существует и достоверна: `‖x − x*‖∞ / ‖x*‖∞ <= [relativeBound]`.
+     * The estimate exists and is reliable: `‖x − x*‖∞ / ‖x*‖∞ <= [relativeBound]`.
      *
-     * @property cond использованное число обусловленности.
-     * @property relativeBound произведение `cond · backwardError`.
+     * @property cond the condition number used.
+     * @property relativeBound the product `cond · backwardError`.
      */
     public data class Bounded(
         override val backwardError: Double,
@@ -94,28 +94,28 @@ public sealed interface ForwardError {
     ) : ForwardError
 
     /**
-     * Конечной границы нет: матрица численно вырождена — обращение не удалось либо
-     * спектральная оценка дала нулевое собственное значение.
+     * There is no finite bound: the matrix is numerically singular — the inversion failed or
+     * the spectral estimate produced a zero eigenvalue.
      */
     public data class NoFiniteBound(override val backwardError: Double) : ForwardError
 
     /**
-     * Оценка `cond` конечна, но недостоверна ([ConditionEstimate.isReliable] равно `false`).
+     * The `cond` estimate is finite but unreliable ([ConditionEstimate.isReliable] is `false`).
      *
-     * @property condition сама недостоверная оценка — невязка обращения лежит в ней.
+     * @property condition the unreliable estimate itself — it carries the inversion residual.
      */
     public data class Unreliable(
         override val backwardError: Double,
         val condition: ConditionEstimate,
     ) : ForwardError
 
-    /** Граница прямой ошибки или `null` в режимах [NoFiniteBound] и [Unreliable]. */
+    /** The forward-error bound, or `null` in the [NoFiniteBound] and [Unreliable] modes. */
     public fun relativeBoundOrNull(): Double? = (this as? Bounded)?.relativeBound
 
     /**
-     * Сколько десятичных разрядов результата заведомо уцелело: `−log10(границы)`,
-     * обрезанное снизу нулём и сверху 16 (полная мантисса double).
-     * `null` там же, где `null` у [relativeBoundOrNull].
+     * How many decimal digits of the result are guaranteed to survive: `−log10(bound)`,
+     * clamped to 0 from below and to 16 from above (the full double mantissa).
+     * `null` exactly where [relativeBoundOrNull] is `null`.
      */
     public fun survivingDigitsOrNull(): Double? {
         val bound = relativeBoundOrNull() ?: return null
@@ -125,64 +125,64 @@ public sealed interface ForwardError {
 }
 
 /**
- * Числа обусловленности плотных матриц и оценка прямой ошибки решения СЛАУ.
+ * Condition numbers of dense matrices and forward-error estimation for linear-system solutions.
  *
- * Все вычисления выполняет [LinAlgBackend]: обращение — решение A·X = I по LU-разложению (dgetrf + dgetrs),
- * оценка обусловленности — dgecon, спектр симметричной матрицы — dsyev. Основные
- * перегрузки работают с [DenseMatrix]; перегрузки на [Array]<[DoubleArray]> — адаптеры
- * с копией через [DenseMatrix.fromRows].
+ * All computations are performed by a [LinAlgBackend]: inversion — solving A·X = I via the LU factorization (dgetrf + dgetrs),
+ * condition estimation — dgecon, spectrum of a symmetric matrix — dsyev. The primary
+ * overloads work with [DenseMatrix]; the [Array]<[DoubleArray]> overloads are adapters
+ * that copy via [DenseMatrix.fromRows].
  *
- * Оценка через явное обращение ([conditionInf]) достоверна на хорошо обусловленных
- * матрицах и теряет смысл на почти вырожденных: `A⁻¹` вычисляется тем же LU, чья
- * прямая ошибка растёт как `cond(A)·ε`. Невязка `‖A·A⁻¹ − I‖∞` показывает эту потерю
- * напрямую, поэтому результат всегда содержит её ([ConditionEstimate]). Для симметричных
- * матриц надёжнее спектральная оценка [conditionSymmetric]: ортогональные преобразования
- * не обращают матрицу и на вырожденной честно дают нулевое собственное значение.
+ * The estimate via explicit inversion ([conditionInf]) is reliable on well-conditioned
+ * matrices and loses meaning on nearly singular ones: `A⁻¹` is computed by the same LU, whose
+ * forward error grows like `cond(A)·ε`. The residual `‖A·A⁻¹ − I‖∞` shows this loss
+ * directly, so the result always carries it ([ConditionEstimate]). For symmetric
+ * matrices the spectral estimate [conditionSymmetric] is more robust: orthogonal transformations
+ * do not invert the matrix and honestly yield a zero eigenvalue on a singular one.
  */
 public object Conditioning {
 
     /**
-     * Порог достоверности оценки [conditionInf] по невязке обращения `‖A·A⁻¹ − I‖∞`.
-     * Соответствует потере половины значащих разрядов: при большей невязке в оценке
-     * `cond` не остаётся и половины верных цифр.
+     * Reliability threshold for the [conditionInf] estimate in terms of the inversion residual `‖A·A⁻¹ − I‖∞`.
+     * Corresponds to losing half of the significant digits: for a larger residual not even
+     * half of the digits of the `cond` estimate are correct.
      */
     public const val INVERSION_RESIDUAL_TOLERANCE: Double = 1e-8
 
-    /** Строчная норма матрицы `‖A‖∞ = max_i Σ_j |a_ij|`; матрица должна быть непустой. */
+    /** Row-sum matrix norm `‖A‖∞ = max_i Σ_j |a_ij|`; the matrix must be non-empty. */
     public fun matrixNormInf(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
-        Shapes.requireNonEmpty(a, "матрица A")
+        Shapes.requireNonEmpty(a, "matrix A")
         return backend.norm(a, MatrixNorm.INF)
     }
 
-    /** Строчная норма матрицы над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Row-sum matrix norm over a row array; see the [DenseMatrix] overload. */
     public fun matrixNormInf(a: Array<DoubleArray>): Double = matrixNormInf(rows(a))
 
     /**
-     * Обращение квадратной матрицы через LU-разложение.
+     * Inverse of a square matrix via the LU factorization.
      *
-     * @return `A⁻¹` или `null`, если матрица признана вырожденной либо результат содержит
-     *   нечисловые значения. Достоверность конечного результата не гарантируется — её
-     *   измеряет [inversionResidual].
+     * @return `A⁻¹`, or `null` if the matrix was found to be singular or the result contains
+     *   non-finite values. Reliability of a finite result is not guaranteed — it is
+     *   measured by [inversionResidual].
      */
     public fun inverse(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): DenseMatrix? {
-        Shapes.requireSquare(a, "матрица A")
+        Shapes.requireSquare(a, "matrix A")
         val inv = backend.inverse(a) ?: return null
         for (v in inv.data) if (!v.isFinite()) return null
         return inv
     }
 
-    /** Обращение над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Inverse over a row array; see the [DenseMatrix] overload. */
     @Deprecated(
-        "Используйте перегрузку с DenseMatrix",
+        "Use the DenseMatrix overload",
         ReplaceWith("inverse(DenseMatrix.fromRows(a))"),
         DeprecationLevel.WARNING,
     )
     public fun inverse(a: Array<DoubleArray>): Array<DoubleArray>? = inverse(rows(a))?.toRows()
 
-    /** Невязка обращения `‖A·B − I‖∞` — мера того, сколько разрядов уцелело в `B ≈ A⁻¹`. */
+    /** Inversion residual `‖A·B − I‖∞` — a measure of how many digits survived in `B ≈ A⁻¹`. */
     public fun inversionResidual(a: DenseMatrix, inv: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
-        Shapes.requireSquare(a, "матрица A")
-        Shapes.requireSquare(inv, "матрица A⁻¹")
+        Shapes.requireSquare(a, "matrix A")
+        Shapes.requireSquare(inv, "matrix A⁻¹")
         Shapes.requireSameShape(a, inv)
         val r = backend.matMat(a, inv)
         val n = a.rows
@@ -191,57 +191,57 @@ public object Conditioning {
         return backend.norm(r, MatrixNorm.INF)
     }
 
-    /** Невязка обращения над массивами строк; см. перегрузку с [DenseMatrix]. */
+    /** Inversion residual over row arrays; see the [DenseMatrix] overload. */
     public fun inversionResidual(a: Array<DoubleArray>, inv: Array<DoubleArray>): Double =
         inversionResidual(rows(a), rows(inv))
 
     /**
-     * Оценка `cond∞(A) = ‖A‖∞ · ‖A⁻¹‖∞` через явное обращение, вместе с невязкой обращения.
+     * Estimate of `cond∞(A) = ‖A‖∞ · ‖A⁻¹‖∞` via explicit inversion, together with the inversion residual.
      *
-     * На вырожденной матрице исключение не бросается: возвращается бесконечная оценка
-     * с бесконечной невязкой, и [ConditionEstimate.isReliable] равно `false`.
+     * No exception is thrown on a singular matrix: an infinite estimate with an infinite
+     * residual is returned, and [ConditionEstimate.isReliable] is `false`.
      *
-     * @param tolerance порог достоверности по невязке обращения; строго положителен.
-     * @throws IllegalArgumentException если матрица пуста, не квадратна или `tolerance <= 0`.
+     * @param tolerance reliability threshold in terms of the inversion residual; strictly positive.
+     * @throws IllegalArgumentException if the matrix is empty, not square, or `tolerance <= 0`.
      */
     public fun conditionInf(
         a: DenseMatrix,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
         backend: LinAlgBackend = Backends.default(),
     ): ConditionEstimate {
-        require(tolerance > 0.0) { "conditionInf: требуется tolerance > 0, получено $tolerance" }
-        Shapes.requireSquare(a, "матрица A")
+        require(tolerance > 0.0) { "conditionInf: tolerance must be > 0, got $tolerance" }
+        Shapes.requireSquare(a, "matrix A")
         val inv = inverse(a, backend)
             ?: return ConditionEstimate(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, tolerance)
         val cond = matrixNormInf(a, backend) * matrixNormInf(inv, backend)
         return ConditionEstimate(cond, inversionResidual(a, inv, backend), tolerance)
     }
 
-    /** Оценка обусловленности через обращение над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Condition estimate via inversion over a row array; see the [DenseMatrix] overload. */
     public fun conditionInf(
         a: Array<DoubleArray>,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
     ): ConditionEstimate = conditionInf(rows(a), tolerance)
 
     /**
-     * Оценка числа обусловленности в норме-1 средствами LAPACK (dgecon) по LU-разложению.
+     * Condition-number estimate in the 1-norm by LAPACK (dgecon) from the LU factorization.
      *
-     * Даёт оценку снизу, обычно в пределах множителя порядка единиц от точного значения;
-     * стоимость O(n²) после факторизации против O(n³) для явного обращения.
-     * [ConditionEstimate.inversionResidual] равна нулю, потому что обращение не выполняется,
-     * и для конечной оценки [ConditionEstimate.isReliable] истинно — достоверность здесь
-     * обеспечивается алгоритмом. На вырожденной матрице возвращается бесконечная оценка
-     * (её [ConditionEstimate.valueOrNull] даёт `null`).
+     * Gives a lower bound, usually within a factor of a few units of the exact value;
+     * the cost is O(n²) after the factorization versus O(n³) for explicit inversion.
+     * [ConditionEstimate.inversionResidual] is zero because no inversion is performed,
+     * and for a finite estimate [ConditionEstimate.isReliable] is true — reliability here
+     * is ensured by the algorithm. On a singular matrix an infinite estimate is returned
+     * (its [ConditionEstimate.valueOrNull] gives `null`).
      *
-     * @throws IllegalArgumentException если матрица пуста, не квадратна или `tolerance <= 0`.
+     * @throws IllegalArgumentException if the matrix is empty, not square, or `tolerance <= 0`.
      */
     public fun conditionEstimate(
         a: DenseMatrix,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
         backend: LinAlgBackend = Backends.default(),
     ): ConditionEstimate {
-        require(tolerance > 0.0) { "conditionEstimate: требуется tolerance > 0, получено $tolerance" }
-        Shapes.requireSquare(a, "матрица A")
+        require(tolerance > 0.0) { "conditionEstimate: tolerance must be > 0, got $tolerance" }
+        Shapes.requireSquare(a, "matrix A")
         val lu = backend.luFactor(a)
         if (lu.isSingular) return ConditionEstimate(Double.POSITIVE_INFINITY, 0.0, tolerance)
         val rcond = backend.reciprocalCondition1(lu, backend.norm(a, MatrixNorm.ONE))
@@ -250,23 +250,23 @@ public object Conditioning {
     }
 
     /**
-     * Собственные значения симметричной матрицы по возрастанию (dsyev).
+     * Eigenvalues of a symmetric matrix in ascending order (dsyev).
      *
-     * @throws IllegalArgumentException если матрица пуста, не квадратна или её асимметрия
-     *   превышает `1e-12 · ‖A‖∞`.
+     * @throws IllegalArgumentException if the matrix is empty, not square, or its asymmetry
+     *   exceeds `1e-12 · ‖A‖∞`.
      */
     public fun symmetricEigenvalues(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): DoubleArray {
-        Shapes.requireSquare(a, "матрица A")
-        Shapes.requireSymmetric(a, backend.norm(a, MatrixNorm.INF), "матрица A")
+        Shapes.requireSquare(a, "matrix A")
+        Shapes.requireSymmetric(a, backend.norm(a, MatrixNorm.INF), "matrix A")
         return backend.symmetricEigenvalues(a)
     }
 
-    /** Собственные значения над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Eigenvalues over a row array; see the [DenseMatrix] overload. */
     public fun symmetricEigenvalues(a: Array<DoubleArray>): DoubleArray = symmetricEigenvalues(rows(a))
 
     /**
-     * Наименьшее по модулю собственное значение симметричной матрицы — её `σ_min`.
-     * Ровно `0.0` означает численную вырожденность.
+     * Smallest-magnitude eigenvalue of a symmetric matrix — its `σ_min`.
+     * Exactly `0.0` means numerical singularity.
      */
     public fun smallestMagnitudeEigenvalue(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
         var m = Double.POSITIVE_INFINITY
@@ -274,12 +274,12 @@ public object Conditioning {
         return m
     }
 
-    /** Наименьшее по модулю собственное значение над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Smallest-magnitude eigenvalue over a row array; see the [DenseMatrix] overload. */
     public fun smallestMagnitudeEigenvalue(a: Array<DoubleArray>): Double = smallestMagnitudeEigenvalue(rows(a))
 
     /**
-     * Спектральное число обусловленности симметричной матрицы `max|λ_i| / min|λ_i|`.
-     * Возвращает [Double.POSITIVE_INFINITY] при `min|λ_i| = 0`.
+     * Spectral condition number of a symmetric matrix `max|λ_i| / min|λ_i|`.
+     * Returns [Double.POSITIVE_INFINITY] when `min|λ_i| = 0`.
      */
     public fun conditionSymmetric(a: DenseMatrix, backend: LinAlgBackend = Backends.default()): Double {
         var lo = Double.POSITIVE_INFINITY
@@ -291,20 +291,20 @@ public object Conditioning {
         return if (lo == 0.0) Double.POSITIVE_INFINITY else hi / lo
     }
 
-    /** Спектральное число обусловленности над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Spectral condition number over a row array; see the [DenseMatrix] overload. */
     public fun conditionSymmetric(a: Array<DoubleArray>): Double = conditionSymmetric(rows(a))
 
     /**
-     * Относительная обратная ошибка решения `A x = b`:
+     * Relative backward error of the solution of `A x = b`:
      * `ω = ‖Ax − b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)`.
      *
-     * Нормировка совпадает с постпроверкой [LinearAlgebra.solve] по порогу
-     * [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE]. Величина измеряется, а не оценивается,
-     * и потому достоверна всегда; прямую ошибку она не ограничивает — множителем служит
-     * `cond(A)`, см. [ForwardError]. При нулевом масштабе (`A = 0`, `b = 0`) возвращается `0.0`.
+     * The normalization matches the post-check of [LinearAlgebra.solve] against the threshold
+     * [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE]. The quantity is measured, not estimated,
+     * and is therefore always reliable; it does not bound the forward error — the multiplier is
+     * `cond(A)`, see [ForwardError]. For zero scale (`A = 0`, `b = 0`) `0.0` is returned.
      *
-     * @throws IllegalArgumentException если матрица пуста, не квадратна или длины `b`, `x`
-     *   не равны её порядку.
+     * @throws IllegalArgumentException if the matrix is empty, not square, or the lengths of `b`, `x`
+     *   do not equal its order.
      */
     public fun relativeBackwardError(
         a: DenseMatrix,
@@ -312,7 +312,7 @@ public object Conditioning {
         x: DoubleArray,
         backend: LinAlgBackend = Backends.default(),
     ): Double {
-        Shapes.requireSquare(a, "матрица A")
+        Shapes.requireSquare(a, "matrix A")
         val n = a.rows
         Shapes.requireVectorLength(b, n, "b")
         Shapes.requireVectorLength(x, n, "x")
@@ -322,23 +322,23 @@ public object Conditioning {
         return if (scale == 0.0) 0.0 else LinearAlgebra.normInf(r) / scale
     }
 
-    /** Обратная ошибка над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Backward error over a row array; see the [DenseMatrix] overload. */
     public fun relativeBackwardError(a: Array<DoubleArray>, b: DoubleArray, x: DoubleArray): Double =
         relativeBackwardError(rows(a), b, x)
 
     /**
-     * Граница относительной прямой ошибки `cond·ω` по готовой оценке обусловленности
-     * и измеренной обратной ошибке `ω`.
+     * Relative forward-error bound `cond·ω` from a ready condition estimate
+     * and the measured backward error `ω`.
      *
-     * Функция ничего не вычисляет заново: она переводит пару «оценка `cond` + обратная
-     * ошибка» в один из трёх режимов [ForwardError], не позволяя недостоверному `cond`
-     * превратиться в число.
+     * The function computes nothing anew: it converts the pair "`cond` estimate + backward
+     * error" into one of the three [ForwardError] modes, never letting an unreliable `cond`
+     * turn into a number.
      *
-     * @param backwardError результат [relativeBackwardError]; требуется конечным и неотрицательным.
+     * @param backwardError the result of [relativeBackwardError]; must be finite and non-negative.
      */
     public fun forwardError(condition: ConditionEstimate, backwardError: Double): ForwardError {
         require(backwardError.isFinite() && backwardError >= 0.0) {
-            "forwardError: обратная ошибка должна быть конечной и неотрицательной, получено $backwardError"
+            "forwardError: backward error must be finite and non-negative, got $backwardError"
         }
         return when {
             !condition.condInf.isFinite() -> ForwardError.NoFiniteBound(backwardError)
@@ -348,15 +348,15 @@ public object Conditioning {
     }
 
     /**
-     * Граница относительной прямой ошибки для симметричной матрицы через спектральную
-     * оценку [conditionSymmetric].
+     * Relative forward-error bound for a symmetric matrix via the spectral
+     * estimate [conditionSymmetric].
      *
-     * Различает два факта: конечного числа обусловленности нет вовсе (`min|λ| = 0`,
-     * режим [ForwardError.NoFiniteBound]) и `cond` велико, но конечно
-     * ([ForwardError.Bounded] с большой границей). Режим [ForwardError.Unreliable]
-     * не возвращается никогда.
+     * Distinguishes two facts: there is no finite condition number at all (`min|λ| = 0`,
+     * mode [ForwardError.NoFiniteBound]) and `cond` is large but finite
+     * ([ForwardError.Bounded] with a large bound). The [ForwardError.Unreliable] mode
+     * is never returned.
      *
-     * @throws IllegalArgumentException если матрица не симметрична.
+     * @throws IllegalArgumentException if the matrix is not symmetric.
      */
     public fun forwardErrorSymmetric(
         a: DenseMatrix,
@@ -364,7 +364,7 @@ public object Conditioning {
         backend: LinAlgBackend = Backends.default(),
     ): ForwardError {
         require(backwardError.isFinite() && backwardError >= 0.0) {
-            "forwardErrorSymmetric: обратная ошибка должна быть конечной и неотрицательной, получено $backwardError"
+            "forwardErrorSymmetric: backward error must be finite and non-negative, got $backwardError"
         }
         val cond = conditionSymmetric(a, backend)
         return if (!cond.isFinite()) {
@@ -374,40 +374,40 @@ public object Conditioning {
         }
     }
 
-    /** Граница прямой ошибки для симметричной матрицы над массивом строк; см. перегрузку с [DenseMatrix]. */
+    /** Forward-error bound for a symmetric matrix over a row array; see the [DenseMatrix] overload. */
     public fun forwardErrorSymmetric(a: Array<DoubleArray>, backwardError: Double): ForwardError =
         forwardErrorSymmetric(rows(a), backwardError)
 
-    /** Адаптер массива строк: пустой массив отвергается здесь, рваный — в [DenseMatrix.fromRows]. */
+    /** Row-array adapter: an empty array is rejected here, a ragged one in [DenseMatrix.fromRows]. */
     private fun rows(a: Array<DoubleArray>): DenseMatrix {
-        require(a.isNotEmpty() && a[0].isNotEmpty()) { "матрица A не должна быть пустой" }
+        require(a.isNotEmpty() && a[0].isNotEmpty()) { "matrix A must not be empty" }
         return DenseMatrix.fromRows(a)
     }
 
-    // Перегрузки с NumericsContext используют его реализацию линейной алгебры.
+    // The NumericsContext overloads use its linear-algebra implementation.
 
-    /** То же, что [inverse], с реализацией линейной алгебры из [context]. */
+    /** Same as [inverse], with the linear-algebra implementation from [context]. */
     public fun inverse(a: DenseMatrix, context: NumericsContext): DenseMatrix? = inverse(a, context.backend)
 
-    /** То же, что [conditionInf], с реализацией линейной алгебры из [context]. */
+    /** Same as [conditionInf], with the linear-algebra implementation from [context]. */
     public fun conditionInf(
         a: DenseMatrix,
         context: NumericsContext,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
     ): ConditionEstimate = conditionInf(a, tolerance, context.backend)
 
-    /** То же, что [conditionEstimate], с реализацией линейной алгебры из [context]. */
+    /** Same as [conditionEstimate], with the linear-algebra implementation from [context]. */
     public fun conditionEstimate(
         a: DenseMatrix,
         context: NumericsContext,
         tolerance: Double = INVERSION_RESIDUAL_TOLERANCE,
     ): ConditionEstimate = conditionEstimate(a, tolerance, context.backend)
 
-    /** То же, что [symmetricEigenvalues], с реализацией линейной алгебры из [context]. */
+    /** Same as [symmetricEigenvalues], with the linear-algebra implementation from [context]. */
     public fun symmetricEigenvalues(a: DenseMatrix, context: NumericsContext): DoubleArray =
         symmetricEigenvalues(a, context.backend)
 
-    /** То же, что [conditionSymmetric], с реализацией линейной алгебры из [context]. */
+    /** Same as [conditionSymmetric], with the linear-algebra implementation from [context]. */
     public fun conditionSymmetric(a: DenseMatrix, context: NumericsContext): Double =
         conditionSymmetric(a, context.backend)
 }

@@ -24,7 +24,7 @@ import kotlin.math.pow
 @Tag("fast")
 class ReliabilityPropertyTest {
 
-    /** Любые double, включая NaN, ±∞, ±0 и значения вблизи порога шума. */
+    /** Arbitrary doubles, including NaN, ±∞, ±0 and values near the noise threshold. */
     @Provide
     fun anyDouble(): Arbitrary<Double> = Arbitraries.oneOf(
         Arbitraries.doubles(),
@@ -34,7 +34,7 @@ class ReliabilityPropertyTest {
 
     @Provide fun thresholds(): Arbitrary<Double> = Arbitraries.of(MACHINE_NOISE_THRESHOLD, 1e-16, 1e-8, 1.0)
 
-    /** Положительные погрешности: обычные, шумовые и ровно нулевые. */
+    /** Positive errors: ordinary, noise-level and exactly zero. */
     @Provide
     fun errorLists(): Arbitrary<List<Double>> = Arbitraries.oneOf(
         Arbitraries.doubles().between(1e-12, 10.0).ofScale(14),
@@ -43,7 +43,7 @@ class ReliabilityPropertyTest {
     ).list().ofMinSize(1).ofMaxSize(8)
 
     @Property(tries = 100)
-    fun `measured достоверно тогда и только тогда, когда значение конечно и не ниже порога`(@ForAll("anyDouble") v: Double, @ForAll("thresholds") thr: Double) {
+    fun `measured is reliable iff the value is finite and not below the threshold`(@ForAll("anyDouble") v: Double, @ForAll("thresholds") thr: Double) {
         val m = measured(v, thr)
         val expectReliable = v.isFinite() && abs(v) >= thr
         assertEquals(expectReliable, m is Measured.Reliable) { "measured($v, $thr) = $m" }
@@ -54,7 +54,7 @@ class ReliabilityPropertyTest {
     }
 
     @Property(tries = 100)
-    fun `reliableOrders обнуляет порядок на шуме и повторяет orders иначе`(@ForAll("errorLists") errs: List<Double>) {
+    fun `reliableOrders nulls the order at noise level and matches orders otherwise`(@ForAll("errorLists") errs: List<Double>) {
         val rel = reliableOrders(errs)
         val plain = orders(errs)
         assertEquals(errs.size, rel.size)
@@ -62,27 +62,27 @@ class ReliabilityPropertyTest {
         for (i in 0 until errs.size - 1) {
             val noisy = measured(errs[i]) is Measured.AtNoiseLevel || measured(errs[i + 1]) is Measured.AtNoiseLevel
             if (noisy) {
-                assertNull(rel[i]) { "позиция $i: ожидался null на шуме, получено ${rel[i]}" }
+                assertNull(rel[i]) { "position $i: expected null at noise level, got ${rel[i]}" }
             } else {
-                assertEquals(plain[i].toRawBits(), rel[i]!!.toRawBits()) { "позиция $i: ${rel[i]} vs ${plain[i]}" }
+                assertEquals(plain[i].toRawBits(), rel[i]!!.toRawBits()) { "position $i: ${rel[i]} vs ${plain[i]}" }
             }
         }
     }
 
     @Property(tries = 100)
-    fun `orders восстанавливает показатель геометрической последовательности`(
+    fun `orders recovers the exponent of a geometric sequence`(
         @ForAll @DoubleRange(min = 0.5, max = 4.0) p: Double,
         @ForAll @DoubleRange(min = 1e-3, max = 10.0) @Scale(6) c: Double,
         @ForAll @IntRange(min = 3, max = 8) size: Int,
     ) {
         val errs = List(size) { i -> c * 2.0.pow(-p * i) }
         val got = orders(errs)
-        for (i in 0 until size - 1) assertTrue(abs(got[i] - p) <= 1e-10) { "позиция $i: ${got[i]} vs $p" }
+        for (i in 0 until size - 1) assertTrue(abs(got[i] - p) <= 1e-10) { "position $i: ${got[i]} vs $p" }
         assertTrue(got.last().isNaN())
     }
 
     @Property(tries = 100)
-    fun `ratio определено только для двух достоверных значений`(@ForAll("anyDouble") a: Double, @ForAll("anyDouble") b: Double) {
+    fun `ratio is defined only for two reliable values`(@ForAll("anyDouble") a: Double, @ForAll("anyDouble") b: Double) {
         val ma = measured(a)
         val mb = measured(b)
         val r = ratio(ma, mb)

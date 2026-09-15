@@ -9,20 +9,20 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Тесты диагностики прямой ошибки решения СЛАУ.
+ * Tests of the forward-error diagnostics for linear system solutions.
  *
- * Проверяемое требование: малая обратная ошибка (единственное, что контролирует
- * постпроверка `solve` по порогу [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE])
- * не должна выглядеть как признак точности результата. На численно вырожденном
- * входе API обязан либо честно сказать «границы нет», либо пометить оценку
- * недостоверной, но не возвращать число, выглядящее как правда.
+ * Requirement under test: a small backward error (the only thing the `solve` post-check
+ * controls, via the [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE] threshold) must not
+ * look like evidence of an accurate result. On numerically singular input the API must
+ * either honestly say "there is no bound" or flag the estimate as unreliable, but never
+ * return a number that looks like the truth.
  */
 @Tag("fast")
 class ForwardErrorTest {
 
-    // --- Обратная ошибка: измерение, а не оценка -----------------------------
+    // --- Backward error: a measurement, not an estimate -----------------------
 
-    /** На точном решении невязка нулевая, значит и относительная обратная ошибка равна 0. */
+    /** On the exact solution the residual is zero, hence the relative backward error is 0. */
     @Test fun backwardErrorOfExactSolutionIsZero() {
         val a = arrayOf(doubleArrayOf(2.0, 0.0), doubleArrayOf(0.0, 4.0))
         val b = doubleArrayOf(2.0, 4.0)
@@ -30,9 +30,9 @@ class ForwardErrorTest {
     }
 
     /**
-     * Значение совпадает с формулой `‖Ax−b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)` — той же, что
-     * стоит в постпроверке `solve`. Здесь ‖A‖∞ = 4, ‖x‖∞ = 1, ‖b‖∞ = 4,
-     * ‖Ax−b‖∞ = |2·1 − 3| = 1, значит ответ 1/4.
+     * The value matches the formula `‖Ax−b‖∞ / max(‖A‖∞‖x‖∞, ‖b‖∞)` — the same one
+     * used in the `solve` post-check. Here ‖A‖∞ = 4, ‖x‖∞ = 1, ‖b‖∞ = 4,
+     * ‖Ax−b‖∞ = |2·1 − 3| = 1, so the answer is 1/4.
      */
     @Test fun backwardErrorMatchesSolveNormalisation() {
         val a = arrayOf(doubleArrayOf(2.0, 0.0), doubleArrayOf(0.0, 4.0))
@@ -40,14 +40,14 @@ class ForwardErrorTest {
         assertEquals(0.25, Conditioning.relativeBackwardError(a, b, doubleArrayOf(1.0, 1.0)), 1e-15)
     }
 
-    /** Нулевой масштаб (A = 0, b = 0) даёт 0.0, а не NaN от деления ноль на ноль. */
+    /** Zero scale (A = 0, b = 0) gives 0.0, not NaN from dividing zero by zero. */
     @Test fun backwardErrorOfZeroSystemIsZeroNotNaN() {
         val a = arrayOf(doubleArrayOf(0.0, 0.0), doubleArrayOf(0.0, 0.0))
         val z = doubleArrayOf(0.0, 0.0)
         assertEquals(0.0, Conditioning.relativeBackwardError(a, z, z), 0.0)
     }
 
-    /** Пустая, неквадратная и несогласованные по длине входы отвергаются контрактом. */
+    /** Empty, non-square and length-mismatched inputs are rejected by the contract. */
     @Test fun backwardErrorRejectsMalformed() {
         val a = arrayOf(doubleArrayOf(1.0, 0.0), doubleArrayOf(0.0, 1.0))
         val v = doubleArrayOf(1.0, 1.0)
@@ -61,9 +61,9 @@ class ForwardErrorTest {
         assertFailsWith<IllegalArgumentException> { Conditioning.relativeBackwardError(a, v, doubleArrayOf(1.0)) }
     }
 
-    // --- Три режима ForwardError --------------------------------------------
+    // --- The three ForwardError modes ----------------------------------------
 
-    /** Достоверная оценка cond даёт границу `cond · ω` и число уцелевших разрядов. */
+    /** A reliable cond estimate gives the bound `cond · ω` and the number of surviving digits. */
     @Test fun reliableConditionGivesBoundedForwardError() {
         val est = ConditionEstimate(1e6, 1e-15, Conditioning.INVERSION_RESIDUAL_TOLERANCE)
         val fe = Conditioning.forwardError(est, 1e-16)
@@ -75,8 +75,8 @@ class ForwardErrorTest {
     }
 
     /**
-     * Недостоверная оценка cond не превращается в число: режим [ForwardError.Unreliable],
-     * `relativeBoundOrNull() == null`. Это и есть защита от «числа, выглядящего как правда».
+     * An unreliable cond estimate is not turned into a number: mode [ForwardError.Unreliable],
+     * `relativeBoundOrNull() == null`. This is precisely the guard against "a number that looks like the truth".
      */
     @Test fun unreliableConditionYieldsNoNumber() {
         val est = ConditionEstimate(3.7e18, 760.0, Conditioning.INVERSION_RESIDUAL_TOLERANCE)
@@ -84,13 +84,13 @@ class ForwardErrorTest {
         assertTrue(fe is ForwardError.Unreliable)
         assertNull(fe.relativeBoundOrNull())
         assertNull(fe.survivingDigitsOrNull())
-        // Сама недостоверная оценка сохранена для печати с пометкой и разбора причины.
+        // The unreliable estimate itself is kept for flagged printing and root-cause analysis.
         assertEquals(760.0, fe.condition.inversionResidual, 0.0)
     }
 
     /**
-     * «Конечного cond нет вовсе» отличается от «cond большой, но конечный»:
-     * бесконечная оценка даёт [ForwardError.NoFiniteBound], а не [ForwardError.Unreliable].
+     * "No finite cond at all" differs from "cond is large but finite":
+     * an infinite estimate gives [ForwardError.NoFiniteBound], not [ForwardError.Unreliable].
      */
     @Test fun infiniteConditionIsDistinctFromUnreliable() {
         val est = ConditionEstimate(Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, 1e-8)
@@ -100,7 +100,7 @@ class ForwardErrorTest {
         assertEquals(1e-16, fe.backwardError, 0.0)
     }
 
-    /** Нулевая обратная ошибка означает полную мантиссу: 16 разрядов, а не бесконечность. */
+    /** Zero backward error means the full mantissa: 16 digits, not infinity. */
     @Test fun zeroBackwardErrorGivesFullMantissa() {
         val est = ConditionEstimate(21.0, 0.0, 1e-8)
         val fe = Conditioning.forwardError(est, 0.0)
@@ -108,7 +108,7 @@ class ForwardErrorTest {
         assertEquals(16.0, fe.survivingDigitsOrNull()!!, 0.0)
     }
 
-    /** Граница >= 1 означает «ни одного гарантированно верного разряда», а не отрицательное число. */
+    /** A bound >= 1 means "no guaranteed correct digits at all", not a negative number. */
     @Test fun boundAboveOneMeansZeroSurvivingDigits() {
         val est = ConditionEstimate(1e14, 1e-15, 1e-8)
         val fe = Conditioning.forwardError(est, 1e-13)
@@ -116,7 +116,7 @@ class ForwardErrorTest {
         assertEquals(0.0, fe.survivingDigitsOrNull()!!, 0.0)
     }
 
-    /** Нефинитная или отрицательная обратная ошибка — ошибка контракта: это не измерение. */
+    /** A non-finite or negative backward error is a contract violation: it is not a measurement. */
     @Test fun forwardErrorRejectsNonMeasuredBackwardError() {
         val est = ConditionEstimate(21.0, 0.0, 1e-8)
         assertFailsWith<IllegalArgumentException> { Conditioning.forwardError(est, Double.NaN) }
@@ -126,11 +126,11 @@ class ForwardErrorTest {
         }
     }
 
-    // --- Спектральный путь: sigma_min = 0 отличим от «cond велико, но конечно» ---
+    // --- Spectral path: sigma_min = 0 is distinguishable from "cond is large but finite" ---
 
     /**
-     * Точно вырожденная симметричная матрица: спектральный путь честно говорит
-     * «конечной границы нет», а не выдаёт большое случайное число.
+     * An exactly singular symmetric matrix: the spectral path honestly says
+     * "there is no finite bound" instead of producing a large random number.
      */
     @Test fun symmetricPathReportsNoFiniteBoundOnSingularMatrix() {
         val a = arrayOf(doubleArrayOf(1.0, 1.0), doubleArrayOf(1.0, 1.0))
@@ -140,17 +140,17 @@ class ForwardErrorTest {
         assertNull(fe.relativeBoundOrNull())
     }
 
-    /** На хорошо обусловленной симметричной матрице спектральный путь даёт конечную границу. */
+    /** On a well-conditioned symmetric matrix the spectral path gives a finite bound. */
     @Test fun symmetricPathBoundsWellConditionedMatrix() {
         val a = arrayOf(doubleArrayOf(2.0, 1.0), doubleArrayOf(1.0, 2.0))
         val fe = Conditioning.forwardErrorSymmetric(a, 1e-16)
         assertTrue(fe is ForwardError.Bounded)
-        // cond2 = 3/1 = 3, значит граница = 3e-16.
+        // cond2 = 3/1 = 3, hence the bound is 3e-16.
         assertEquals(3.0, fe.cond, 1e-12)
         assertEquals(3e-16, fe.relativeBound, 1e-28)
     }
 
-    /** Несимметричная матрица на спектральном пути — ошибка контракта, а не тихий неверный ответ. */
+    /** A non-symmetric matrix on the spectral path is a contract violation, not a silently wrong answer. */
     @Test fun symmetricPathRejectsAsymmetricMatrix() {
         assertFailsWith<IllegalArgumentException> {
             Conditioning.forwardErrorSymmetric(arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 1.0)), 1e-16)
@@ -160,8 +160,8 @@ class ForwardErrorTest {
     // --- solveDiagnosed ------------------------------------------------------
 
     /**
-     * Решение из [LinearAlgebra.solveDiagnosed] побитово совпадает с решением
-     * [LinearAlgebra.solve]: диагностика ничего не уточняет и не меняет.
+     * The solution from [LinearAlgebra.solveDiagnosed] is bitwise identical to that of
+     * [LinearAlgebra.solve]: the diagnostics neither refine nor alter anything.
      */
     @Test fun diagnosedSolutionIsBitwiseIdenticalToSolve() {
         val n = 16
@@ -170,77 +170,76 @@ class ForwardErrorTest {
         val plain = LinearAlgebra.solve(a, b)
         val diagnosed = LinearAlgebra.solveDiagnosed(a, b)
         for (i in 0 until n) {
-            assertEquals(plain[i].toRawBits(), diagnosed.x[i].toRawBits(), "компонента $i разошлась")
+            assertEquals(plain[i].toRawBits(), diagnosed.x[i].toRawBits(), "component $i differs")
         }
     }
 
     /**
-     * Хорошо обусловленная система: граница прямой ошибки конечна и мала,
-     * значащих разрядов сохраняется почти вся мантисса.
+     * A well-conditioned system: the forward-error bound is finite and small,
+     * and almost the whole mantissa of significant digits survives.
      *
-     * Эталон зафиксирован текущим прогоном: `cond∞ ≈ 1.669`, граница ~5.1e-16,
-     * то есть больше пятнадцати верных десятичных разрядов.
+     * Reference values recorded from the current run: `cond∞ ≈ 1.669`, bound ~5.1e-16,
+     * i.e. more than fifteen correct decimal digits.
      */
     @Test fun wellConditionedSystemKeepsAlmostAllDigits() {
         val n = 16
         val a = Array(n) { i -> DoubleArray(n) { j -> (if (i == j) 1.0 else 0.0) + 0.1 / (1.0 + abs(i - j)) } }
         val b = DoubleArray(n) { 1.0 }
         val fe = LinearAlgebra.solveDiagnosed(a, b).forwardError
-        assertTrue(fe is ForwardError.Bounded, "хорошо обусловленная система обязана давать границу, получено $fe")
+        assertTrue(fe is ForwardError.Bounded, "a well-conditioned system must yield a bound, got $fe")
         assertTrue(fe.cond < 2.0, "cond=${fe.cond}")
-        assertTrue(fe.relativeBound < 1e-14, "граница=${fe.relativeBound}")
-        assertTrue(fe.survivingDigitsOrNull()!! > 14.0, "разрядов=${fe.survivingDigitsOrNull()}")
+        assertTrue(fe.relativeBound < 1e-14, "bound=${fe.relativeBound}")
+        assertTrue(fe.survivingDigitsOrNull()!! > 14.0, "digits=${fe.survivingDigitsOrNull()}")
     }
 
     /**
-     * Численно вырожденная матрица (cond ≫ 1/ε), часть 1: матрица с элементами
-     * `1/(1 + (i + j)/n)` (типа Коши). Ни один путь не имеет права вернуть
-     * маленькую границу прямой ошибки, как бы мала ни была обратная ошибка.
+     * A numerically singular matrix (cond ≫ 1/ε), part 1: a matrix with entries
+     * `1/(1 + (i + j)/n)` (Cauchy-like). No path may return a small forward-error
+     * bound, however small the backward error is.
      *
-     * Обратная ошибка взята фиксированной (машинный эпсилон), а не получена
-     * из `solve` намеренно: на таком входе бэкенды ведут себя по-разному —
-     * `reference` и нативный LAPACK могут признать матрицу вырожденной на разных
-     * шагах, и оба ответа честны (см. границу применимости в KDoc
-     * [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE]). Проверяется здесь не поведение
-     * бэкенда, а поведение диагностики, и оно обязано быть одинаковым везде.
+     * The backward error is deliberately fixed (machine epsilon) rather than obtained
+     * from `solve`: on such input the backends behave differently — `reference` and
+     * native LAPACK may declare the matrix singular at different steps, and both
+     * answers are honest (see the applicability limits in the KDoc of
+     * [LinearAlgebra.SINGULARITY_RELATIVE_TOLERANCE]). What is tested here is not the
+     * backend's behaviour but the diagnostics', and that must be identical everywhere.
      */
     @Test fun nearlySingularCauchyMatrixNeverYieldsSmallForwardBound() {
         val n = 32
         val a = Array(n) { i -> DoubleArray(n) { j -> 1.0 / (1.0 + i.toDouble() / n + j.toDouble() / n) } }
-        val omega = 2.220446049250313e-16 // машинный эпсилон: лучшее, на что способен любой метод решения
+        val omega = 2.220446049250313e-16 // machine epsilon: the best any solver can achieve
 
-        // Путь через обращение: числа нет — либо оценка недостоверна, либо cond бесконечен.
+        // Inversion path: no number — either the estimate is unreliable or cond is infinite.
         val viaInversion = Conditioning.forwardError(Conditioning.conditionInf(a), omega)
-        assertNull(viaInversion.relativeBoundOrNull(), "получено $viaInversion")
+        assertNull(viaInversion.relativeBoundOrNull(), "got $viaInversion")
         assertNull(viaInversion.survivingDigitsOrNull())
         assertTrue(
             viaInversion is ForwardError.Unreliable || viaInversion is ForwardError.NoFiniteBound,
-            "получено $viaInversion",
+            "got $viaInversion",
         )
 
-        // Спектральный путь детерминирован (Якоби не зависит от бэкенда): граница
-        // существует, но она больше единицы — верных разрядов не осталось ни одного.
+        // The spectral path is deterministic (Jacobi does not depend on the backend): a bound
+        // exists, but it exceeds one — not a single correct digit remains.
         val viaSpectrum = Conditioning.forwardErrorSymmetric(a, omega)
-        assertTrue(viaSpectrum is ForwardError.Bounded, "получено $viaSpectrum")
-        assertTrue(viaSpectrum.relativeBound > 1.0, "граница=${viaSpectrum.relativeBound}")
+        assertTrue(viaSpectrum is ForwardError.Bounded, "got $viaSpectrum")
+        assertTrue(viaSpectrum.relativeBound > 1.0, "bound=${viaSpectrum.relativeBound}")
         assertEquals(0.0, viaSpectrum.survivingDigitsOrNull()!!, 0.0)
     }
 
     /**
-     * Численно вырожденная матрица, часть 2: малая обратная ошибка не означает
-     * точности результата — на системе, которую решает любой бэкенд.
+     * A numerically singular matrix, part 2: a small backward error does not imply
+     * an accurate result — on a system that every backend solves.
      *
-     * Матрица `diag(1e-9, 1, …, 1)` невырождена и плохо обусловлена:
-     * `cond∞ = ‖1‖ · ‖1e9‖ = 1e9`. Диагональный вид выбран намеренно: все
-     * величины известны аналитически и одинаковы на любом бэкенде, поэтому
-     * тест проверяет именно логику диагностики, а не арифметику конкретного LU.
+     * The matrix `diag(1e-9, 1, …, 1)` is non-singular and ill-conditioned:
+     * `cond∞ = ‖1‖ · ‖1e9‖ = 1e9`. The diagonal form is chosen deliberately: all
+     * quantities are known analytically and identical on every backend, so the test
+     * checks precisely the diagnostics logic, not the arithmetic of a particular LU.
      *
-     * `solve` на такой системе не выдаёт предупреждения — и справедливо: обратная ошибка ничтожна.
-     * Но гарантировать по ней точность результата нельзя: стоит обратной
-     * ошибке оказаться на уровне машинного эпсилона (лучшее, на что вообще
-     * способен любой метод решения), как множитель `cond∞ = 1e9` съедает девять
-     * десятичных разрядов из шестнадцати. Именно этот множитель и был
-     * невидим на выходе `solve`.
+     * `solve` issues no warning on this system — rightly so: the backward error is negligible.
+     * But it cannot guarantee the accuracy of the result: as soon as the backward error
+     * is at the level of machine epsilon (the best any solver can achieve at all),
+     * the factor `cond∞ = 1e9` eats nine of the sixteen decimal digits. It is exactly
+     * this factor that was invisible in the output of `solve`.
      */
     @Test fun smallBackwardErrorDoesNotImplyAccurateResult() {
         val n = 6
@@ -249,26 +248,26 @@ class ForwardErrorTest {
 
         val d = LinearAlgebra.solveDiagnosed(a, b)
         val fe = d.forwardError
-        // solve молчит: обратная ошибка ничтожна — система решена обратно устойчиво.
+        // solve stays silent: the backward error is negligible — the system is solved backward-stably.
         assertTrue(fe.backwardError < 1e-14, "ω=${fe.backwardError}")
 
-        // Оценка cond достоверна (диагональная матрица обращается точно) и велика.
-        assertTrue(fe is ForwardError.Bounded, "получено $fe")
+        // The cond estimate is reliable (a diagonal matrix is inverted exactly) and large.
+        assertTrue(fe is ForwardError.Bounded, "got $fe")
         assertEquals(1e9, fe.cond, 1e-3)
 
-        // Суть: при любой реалистичной обратной ошибке множитель cond съедает 9 разрядов.
+        // The point: for any realistic backward error the cond factor eats 9 digits.
         val atMachineEpsilon = Conditioning.forwardError(
             ConditionEstimate(fe.cond, 0.0, Conditioning.INVERSION_RESIDUAL_TOLERANCE),
             2.220446049250313e-16,
         )
         val digits = atMachineEpsilon.survivingDigitsOrNull()!!
-        assertTrue(digits in 6.0..8.0, "гарантированных разрядов $digits, ожидалось около 7 вместо 16")
+        assertTrue(digits in 6.0..8.0, "guaranteed digits $digits, expected about 7 instead of 16")
     }
 
     /**
-     * Контракт вырожденности не ослаблен: на точно вырожденной матрице
-     * [LinearAlgebra.solveDiagnosed] бросает исключение так же, как [LinearAlgebra.solve],
-     * и до диагностики дело не доходит.
+     * The singularity contract is not weakened: on an exactly singular matrix
+     * [LinearAlgebra.solveDiagnosed] throws just like [LinearAlgebra.solve],
+     * and the diagnostics are never reached.
      */
     @Test fun diagnosedSolveKeepsSingularityContract() {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(2.0, 4.0))
@@ -277,12 +276,12 @@ class ForwardErrorTest {
         assertFailsWith<IllegalStateException> { LinearAlgebra.solveDiagnosed(a, b) }
     }
 
-    /** Порог достоверности пробрасывается: заниженный порог делает достоверную оценку недостоверной. */
+    /** The reliability tolerance is forwarded: an overly tight tolerance turns a reliable estimate into an unreliable one. */
     @Test fun toleranceIsForwardedToConditionEstimate() {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0))
         val b = doubleArrayOf(1.0, 1.0)
         assertTrue(LinearAlgebra.solveDiagnosed(a, b).forwardError is ForwardError.Bounded)
         val strict = LinearAlgebra.solveDiagnosed(a, b, tolerance = Double.MIN_VALUE).forwardError
-        assertTrue(strict is ForwardError.Unreliable, "получено $strict")
+        assertTrue(strict is ForwardError.Unreliable, "got $strict")
     }
 }

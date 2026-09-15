@@ -1,153 +1,156 @@
-# Точность и достоверность результатов
+# Accuracy and reliability of results
 
-В документе описаны величины, которые библиотека вычисляет для контроля точности, их
-математический смысл и гарантии, предоставляемые каждым публичным методом. Все числовые
-примеры взяты из тестов библиотеки.
+This document describes the quantities the library computes to control accuracy, their
+mathematical meaning, and the guarantees provided by each public method. All numerical
+examples are taken from the library tests.
 
-## Обратная ошибка
+## Backward error
 
-Относительной обратной ошибкой вычисленного решения `x` системы линейных алгебраических
-уравнений (СЛАУ) `Ax = b` называется величина
+The relative backward error of a computed solution `x` of a system of linear algebraic
+equations `Ax = b` is the quantity
 
     ω = ‖Ax − b‖∞ / max(‖A‖∞ ‖x‖∞, ‖b‖∞).
 
-По теореме Ригала–Гаше величина `ω` равна наименьшему числу, при котором `x` является точным
-решением возмущённой системы `(A + ΔA) x = b + Δb` с `‖ΔA‖∞ ≤ ω ‖A‖∞` и `‖Δb‖∞ ≤ ω ‖b‖∞`.
-Таким образом, `ω` характеризует наименьшее относительное возмущение исходных данных, при
-котором найденное решение становится точным.
+By the Rigal–Gaches theorem, `ω` equals the smallest number for which `x` is the exact
+solution of the perturbed system `(A + ΔA) x = b + Δb` with `‖ΔA‖∞ ≤ ω ‖A‖∞` and `‖Δb‖∞ ≤ ω ‖b‖∞`.
+Thus `ω` characterizes the smallest relative perturbation of the input data for which the
+computed solution becomes exact.
 
-LU-разложение с частичным выбором ведущего элемента обратно устойчиво: для корректной
-реализации `ω` имеет порядок `n·ε`, где `ε ≈ 1.1·10⁻¹⁶` — единичное округление двойной
-точности. Поэтому проверка `ω` позволяет обнаружить любую неисправность решателя
-(вырожденность матрицы, нечисловые данные, ошибку реализации LAPACK) независимо от того,
-какая библиотека выполняла разложение. Величина `ω` вычисляется за `O(n²)` операций и не
-требует знания точного решения.
+LU factorization with partial pivoting is backward stable: for a correct implementation `ω`
+is of order `n·ε`, where `ε ≈ 1.1·10⁻¹⁶` is the unit roundoff of double precision.
+Checking `ω` therefore detects any solver failure (a singular matrix, non-numeric data, a
+defect in the LAPACK implementation) regardless of which library performed the
+factorization. The quantity `ω` costs `O(n²)` operations and does not require knowledge of
+the exact solution.
 
-Метод `LinearAlgebra.solve` вычисляет `ω` после каждого решения и завершается исключением,
-если `ω` превышает `SINGULARITY_RELATIVE_TOLERANCE = 1e-10` или решение содержит нечисловые
-значения. Для нечислового входа (`NaN`, `±Inf`) исключение возбуждается до вызова LAPACK.
+`LinearAlgebra.solve` computes `ω` after every solve and throws an exception if `ω` exceeds
+`SINGULARITY_RELATIVE_TOLERANCE = 1e-10` or the solution contains non-numeric values. For
+non-numeric input (`NaN`, `±Inf`) the exception is thrown before LAPACK is called.
 
-### Обоснование порога 1e-10
+### Justification of the 1e-10 threshold
 
-Для матриц размера до `10⁴` ожидаемая обратная ошибка корректного решения не превышает
-`n·ε ≈ 10⁻¹²`, а на практике оказывается на два–три порядка меньше. Порог `10⁻¹⁰` оставляет
-запас в два порядка сверх наихудшей оценки и при этом на много порядков ниже значений,
-возникающих при численной вырожденности: в этом случае `ω` обычно лежит в диапазоне
-`10⁻³…1`, поскольку разложение выполняет деление на ведущие элементы уровня шума. Порог не
-зависит от обусловленности матрицы: плохо обусловленная, но невырожденная система решается
-с малой `ω`, а неточность в таком случае проявляется в прямой ошибке, а не в невязке.
+For matrices of size up to `10⁴` the expected backward error of a correct solution does not
+exceed `n·ε ≈ 10⁻¹²`, and in practice it is two to three orders of magnitude smaller. The
+threshold `10⁻¹⁰` leaves a margin of two orders of magnitude above the worst-case estimate
+while remaining many orders of magnitude below the values that arise from numerical
+singularity: in that case `ω` typically lies in the range `10⁻³…1`, because the
+factorization divides by pivots at noise level. The threshold does not depend on the
+conditioning of the matrix: an ill-conditioned but non-singular system is solved with small
+`ω`, and the inaccuracy in that case shows up in the forward error, not in the residual.
 
-## Прямая ошибка и режимы `ForwardError`
+## Forward error and `ForwardError` modes
 
-Прямой ошибкой называется расстояние от вычисленного решения до точного решения `x*`.
-Через обратную ошибку она оценивается в первом порядке как
+The forward error is the distance from the computed solution to the exact solution `x*`.
+To first order it is bounded in terms of the backward error by
 
     ‖x − x*‖∞ / ‖x*‖∞ ≤ cond∞(A) · ω,   cond∞(A) = ‖A‖∞ ‖A⁻¹‖∞.
 
-Метод `LinearAlgebra.solveDiagnosed` возвращает решение вместе со значением закрытого типа
-`ForwardError`, имеющего три варианта:
+`LinearAlgebra.solveDiagnosed` returns the solution together with a value of the sealed type
+`ForwardError`, which has three variants:
 
-| Вариант | Условие | Смысл |
+| Variant | Condition | Meaning |
 |---|---|---|
-| `Bounded(backwardError, cond, relativeBound)` | оценка `cond` достоверна и `cond · ω < 1` | Относительная ошибка не превышает `relativeBound = cond · ω`; метод `survivingDigitsOrNull()` возвращает число сохранившихся десятичных знаков. |
-| `NoFiniteBound(backwardError)` | оценка `cond` достоверна, но `cond · ω ≥ 1` | Граница не несёт информации: система численно вырождена на уровне точности решения. |
-| `Unreliable(backwardError, condition)` | оценка `cond` недостоверна | Прямая ошибка не оценивается; поле `condition` содержит данные, на основании которых принято решение. |
+| `Bounded(backwardError, cond, relativeBound)` | the `cond` estimate is reliable and `cond · ω < 1` | The relative error does not exceed `relativeBound = cond · ω`; `survivingDigitsOrNull()` returns the number of surviving decimal digits. |
+| `NoFiniteBound(backwardError)` | the `cond` estimate is reliable but `cond · ω ≥ 1` | The bound carries no information: the system is numerically singular at the accuracy level of the solution. |
+| `Unreliable(backwardError, condition)` | the `cond` estimate is unreliable | The forward error is not estimated; the `condition` field holds the data on which the decision was based. |
 
-Недостоверная оценка не возвращается как число: метод `relativeBoundOrNull()` возвращает
-`null` для двух последних вариантов, и код, которому требуется граница, обязан явно
-обработать её отсутствие.
+An unreliable estimate is never returned as a number: `relativeBoundOrNull()` returns
+`null` for the last two variants, and code that needs the bound must handle its absence
+explicitly.
 
 ```kotlin
 val d = LinearAlgebra.solveDiagnosed(a, b)
 when (val e = d.forwardError) {
-    is ForwardError.Bounded       -> println("ошибка ≤ ${e.relativeBound}")
-    is ForwardError.NoFiniteBound -> println("численно вырожденная система, ω = ${e.backwardError}")
-    is ForwardError.Unreliable    -> println("обусловленность не определена достоверно")
+    is ForwardError.Bounded       -> println("error ≤ ${e.relativeBound}")
+    is ForwardError.NoFiniteBound -> println("numerically singular system, ω = ${e.backwardError}")
+    is ForwardError.Unreliable    -> println("condition number not reliably determined")
 }
 ```
 
-## Три способа вычисления числа обусловленности
+## Three ways to compute the condition number
 
-Перечисление `ConditionSource` задаёт способ вычисления `cond` для оценки прямой ошибки.
+The `ConditionSource` enumeration selects how `cond` is computed for the forward error
+estimate.
 
-**`INVERSION`** — `Conditioning.conditionInf`. Вычисляется точное значение `‖A‖∞ ‖A⁻¹‖∞`
-через явное обращение матрицы (LAPACK `dgetrf`, затем `dgetrs` с единичной матрицей в
-правой части); требуется `O(n³)` операций и `n²` дополнительной памяти. Признаком
-достоверности служит невязка обращения `‖A·A⁻¹ − I‖∞`: если она превышает
-`INVERSION_RESIDUAL_TOLERANCE = 1e-8`, вычисленная обратная матрица неточна и
-`ConditionEstimate.isReliable` принимает значение `false`. Невязка обращения растёт как
-`cond · ε`, поэтому при `cond ≳ 10⁸` источник `INVERSION` перестаёт давать достоверные
-значения и сообщает об этом признаком недостоверности, а не возвращает произвольное число.
+**`INVERSION`** — `Conditioning.conditionInf`. The exact value `‖A‖∞ ‖A⁻¹‖∞` is computed via
+explicit matrix inversion (LAPACK `dgetrf`, then `dgetrs` with the identity matrix as the
+right-hand side); this costs `O(n³)` operations and `n²` additional memory. The reliability
+indicator is the inversion residual `‖A·A⁻¹ − I‖∞`: if it exceeds
+`INVERSION_RESIDUAL_TOLERANCE = 1e-8`, the computed inverse is inaccurate and
+`ConditionEstimate.isReliable` is `false`. The inversion residual grows as `cond · ε`, so
+for `cond ≳ 10⁸` the `INVERSION` source stops producing reliable values and reports this
+through the reliability flag instead of returning an arbitrary number.
 
-**`ESTIMATE`** — `Conditioning.conditionEstimate`. Используется оценка LAPACK `dgecon` в
-норме-1 по уже вычисленному LU-разложению: `O(n²)` операций после разложения, без
-дополнительной матрицы. Оценка является нижней для `cond₁(A)` и отличается от точного
-значения не более чем в несколько раз (для алгоритма Хагера–Хайема, как правило, не более
-чем втрое). Для симметричных матриц `cond₁ = cond∞`; в общем случае нормы различаются на
-множитель, зависящий от `n`, поэтому граница `cond · ω` с этим источником носит оценочный
-характер.
+**`ESTIMATE`** — `Conditioning.conditionEstimate`. Uses the LAPACK `dgecon` estimate in the
+1-norm from the already computed LU factorization: `O(n²)` operations after the
+factorization, no additional matrix. The estimate is a lower bound for `cond₁(A)` and
+differs from the exact value by at most a small factor (for the Hager–Higham algorithm,
+typically no more than three). For symmetric matrices `cond₁ = cond∞`; in general the norms
+differ by a factor depending on `n`, so the bound `cond · ω` with this source is
+approximate.
 
-**`SYMMETRIC_SPECTRUM`** — `Conditioning.conditionSymmetric`. Для симметричной матрицы
-вычисляется `cond₂ = |λ|max / |λ|min` по спектру, полученному процедурой LAPACK `dsyev`.
-Для несимметричной матрицы (по величине `maxAsymmetry`) возбуждается исключение.
+**`SYMMETRIC_SPECTRUM`** — `Conditioning.conditionSymmetric`. For a symmetric matrix
+`cond₂ = |λ|max / |λ|min` is computed from the spectrum obtained with the LAPACK routine
+`dsyev`. For a non-symmetric matrix (as measured by `maxAsymmetry`) an exception is thrown.
 
-### Пример: матрица Гильберта 8×8
+### Example: the 8×8 Hilbert matrix
 
-Для матрицы Гильберта порядка 8 `cond∞ ≈ 1.5·10¹⁰`. Две корректные реализации LAPACK
-(Apple Accelerate и переносимая реализация на Java) дают решения системы `Hx = b`,
-различающиеся на `≈1.6·10⁻⁸`, тогда как на хорошо обусловленных матрицах расхождение не
-превышает `2·10⁻¹⁶`. Такое расхождение ожидаемо и не выходит за границу
-`cond · ω ≈ 1.5·10¹⁰ · 10⁻¹⁶`. Невязка обращения на той же матрице составляет `10⁻⁷…10⁻⁶`
-в зависимости от реализации, что превышает порог `10⁻⁸`; поэтому источник `INVERSION`
-возвращает `Unreliable`, а источник `ESTIMATE` — достоверную оценку порядка `10¹⁰`.
+For the Hilbert matrix of order 8, `cond∞ ≈ 1.5·10¹⁰`. Two correct LAPACK implementations
+(Apple Accelerate and the portable Java implementation) produce solutions of `Hx = b` that
+differ by `≈1.6·10⁻⁸`, whereas on well-conditioned matrices the discrepancy does not exceed
+`2·10⁻¹⁶`. This discrepancy is expected and stays within the bound
+`cond · ω ≈ 1.5·10¹⁰ · 10⁻¹⁶`. The inversion residual on the same matrix is `10⁻⁷…10⁻⁶`
+depending on the implementation, which exceeds the `10⁻⁸` threshold; hence the `INVERSION`
+source returns `Unreliable`, while the `ESTIMATE` source returns a reliable estimate of
+order `10¹⁰`.
 
-## Измеренные величины и порог шума
+## Measured quantities and the noise threshold
 
-Для величин, получаемых суммированием (нормы разностей, ошибки на сетках), библиотека
-вводит тип `Measured` и функцию `measured(value, threshold = MACHINE_NOISE_THRESHOLD)` с
-двумя вариантами результата:
+For quantities obtained by summation (norms of differences, errors on grids) the library
+provides the type `Measured` and the function `measured(value, threshold = MACHINE_NOISE_THRESHOLD)`
+with two result variants:
 
-- `Reliable(value)` — `|value| ≥ threshold`: величина отражает измеряемое явление;
-- `AtNoiseLevel(value, threshold)` — `|value| < threshold`: величина неотличима от
-  накопленной ошибки округления.
+- `Reliable(value)` — `|value| ≥ threshold`: the quantity reflects the phenomenon being measured;
+- `AtNoiseLevel(value, threshold)` — `|value| < threshold`: the quantity is indistinguishable
+  from accumulated rounding error.
 
-Граница включена: значение, равное порогу, считается достоверным. Порог
-`MACHINE_NOISE_THRESHOLD = 1e-13` выбран из следующего соображения: суммирование `10³`
-слагаемых порядка единицы накапливает ошибку до `10³ · ε ≈ 10⁻¹³`; для более длинных сумм
-или иного масштаба данных порог задаётся явно. Функции `reliableOrders` и `reliableConstCh`
-вычисляют наблюдаемый порядок сходимости `log₂(e_h / e_{h/2})` и константу `C = e_h / h^p`
-только по достоверным измерениям и возвращают `null`, если хотя бы одна из ошибок лежит на
-уровне шума: в противном случае логарифм отношения двух шумовых величин был бы принят за
-осмысленный порядок сходимости.
+The boundary is inclusive: a value equal to the threshold is considered reliable. The
+threshold `MACHINE_NOISE_THRESHOLD = 1e-13` is chosen as follows: summing `10³` terms of
+order one accumulates an error up to `10³ · ε ≈ 10⁻¹³`; for longer sums or data of a
+different scale the threshold is set explicitly. The functions `reliableOrders` and
+`reliableConstCh` compute the observed convergence order `log₂(e_h / e_{h/2})` and the
+constant `C = e_h / h^p` only from reliable measurements and return `null` if at least one
+of the errors lies at noise level: otherwise the logarithm of the ratio of two noise-level
+quantities would be mistaken for a meaningful convergence order.
 
-## Воспроизводимость на многопоточных реализациях
+## Reproducibility on multithreaded implementations
 
-Системные реализации BLAS/LAPACK с внутренней многопоточностью (Apple Accelerate, OpenBLAS,
-Intel MKL) при одновременных вызовах из нескольких потоков могут давать результаты,
-различающиеся в младших разрядах (относительное расхождение порядка `10⁻¹⁴`) вследствие
-недетерминированного порядка суммирования. Это относится не только к вычислению спектра
-(`dsyev` в `Conditioning.symmetricEigenvalues`), но и к решению СЛАУ (`dgesv` в
-`LinearAlgebra.solve`) и к умножению матриц (`dgemm` в `LinearAlgebra.matMat`). Переносимая
-реализация на Java детерминирована: одинаковые входные данные дают побитово одинаковые
-результаты независимо от числа потоков.
+System BLAS/LAPACK implementations with internal multithreading (Apple Accelerate, OpenBLAS,
+Intel MKL) may, under concurrent calls from several threads, produce results that differ in
+the least significant digits (relative discrepancy of order `10⁻¹⁴`) because of a
+non-deterministic summation order. This applies not only to spectrum computation
+(`dsyev` in `Conditioning.symmetricEigenvalues`) but also to solving linear systems (`dgesv` in
+`LinearAlgebra.solve`) and to matrix multiplication (`dgemm` in `LinearAlgebra.matMat`). The
+portable Java implementation is deterministic: identical inputs give bit-identical results
+regardless of the number of threads.
 
-Библиотека не скрывает это различие. Тесты сравнивают результаты системных реализаций с
-соответствующим допуском (`ConcurrencyTest`, относительная точность `10⁻¹³`); побитовая
-воспроизводимость гарантируется только в последовательном режиме и в `ParallelAssembly`,
-где каждая задача записывает результат в собственный участок памяти.
+The library does not hide this difference. Tests compare the results of system
+implementations with a corresponding tolerance (`ConcurrencyTest`, relative accuracy `10⁻¹³`);
+bit-level reproducibility is guaranteed only in sequential mode and in `ParallelAssembly`,
+where each task writes its result into its own region of memory.
 
-## Сводка гарантий
+## Summary of guarantees
 
-| Метод | Проверяемое условие | Действие при нарушении |
+| Method | Checked condition | Action on violation |
 |---|---|---|
-| `LinearAlgebra.solve` | `ω ≤ 1e-10`, отсутствие `NaN`/`Inf` во входе и выходе | `IllegalStateException` |
-| `LinearAlgebra.solveDiagnosed` | то же и оценка прямой ошибки | `ForwardError.NoFiniteBound` или `Unreliable` вместо числа |
-| `LinearAlgebra.cholesky` | симметричность (`maxAsymmetry`), положительная определённость | `IllegalArgumentException`; `null` для не положительно определённой матрицы |
-| `Conditioning.conditionInf` | невязка обращения `≤ 1e-8` | `ConditionEstimate.isReliable = false`, `valueOrNull() = null` |
-| `Conditioning.conditionEstimate` | вырожденность LU-разложения | `isReliable = false` для вырожденной матрицы |
-| `Conditioning.symmetricEigenvalues` | симметричность входа | `IllegalArgumentException` |
-| `GaussLegendre.integrate` | не менее двух точек разбиения, монотонность разбиения | `IllegalArgumentException` |
+| `LinearAlgebra.solve` | `ω ≤ 1e-10`, no `NaN`/`Inf` in input or output | `IllegalStateException` |
+| `LinearAlgebra.solveDiagnosed` | the same, plus the forward error estimate | `ForwardError.NoFiniteBound` or `Unreliable` instead of a number |
+| `LinearAlgebra.cholesky` | symmetry (`maxAsymmetry`), positive definiteness | `IllegalArgumentException`; `null` for a matrix that is not positive definite |
+| `Conditioning.conditionInf` | inversion residual `≤ 1e-8` | `ConditionEstimate.isReliable = false`, `valueOrNull() = null` |
+| `Conditioning.conditionEstimate` | singularity of the LU factorization | `isReliable = false` for a singular matrix |
+| `Conditioning.symmetricEigenvalues` | symmetry of the input | `IllegalArgumentException` |
+| `GaussLegendre.integrate` | at least two partition points, monotone partition | `IllegalArgumentException` |
 | `measured`, `reliableOrders`, `reliableConstCh` | `|value| ≥ threshold` | `AtNoiseLevel` / `null` |
 
-Все проверки выполняются одинаково для любой реализации BLAS/LAPACK: системной,
-упакованной OpenBLAS и переносимой на Java.
+All checks are performed identically for every BLAS/LAPACK implementation: the system one,
+the bundled OpenBLAS, and the portable Java one.
