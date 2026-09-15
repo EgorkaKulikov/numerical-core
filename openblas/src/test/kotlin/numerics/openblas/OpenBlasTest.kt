@@ -21,8 +21,8 @@ class OpenBlasTest {
         @JvmStatic
         @BeforeAll
         fun setUp() {
-            // До любого обращения к Backends: путь читается один раз при инициализации.
-            assertTrue(OpenBlas.install(), "OpenBLAS должна распаковаться на этой платформе")
+            // Before any access to Backends: the path is read once at initialization.
+            assertTrue(OpenBlas.install(), "OpenBLAS must unpack on this platform")
         }
 
         fun diagonallyDominant(n: Int): Array<DoubleArray> {
@@ -61,10 +61,10 @@ class OpenBlasTest {
     }
 
     @Test
-    fun `путь к библиотеке существует и указывает на вариант с LAPACK`() {
+    fun `library path exists and points to the LAPACK variant`() {
         val path = assertNotNull(OpenBlas.libraryPath())
         val file = File(path)
-        assertTrue(file.exists(), "файл $path должен существовать")
+        assertTrue(file.exists(), "file $path must exist")
         val name = file.name
         assertTrue(name.contains("openblas"), name)
         assertFalse(name.contains("nolapack"), name)
@@ -72,7 +72,7 @@ class OpenBlasTest {
     }
 
     @Test
-    fun `после установки библиотека выбирает нативную реализацию`() {
+    fun `after install the library selects the native implementation`() {
         assertEquals(OpenBlas.libraryPath(), System.getProperty("dev.ludovic.netlib.lapack.nativeLibPath"))
         assertEquals(OpenBlas.libraryPath(), System.getProperty("dev.ludovic.netlib.blas.nativeLibPath"))
         assertTrue(OpenBlas.isInstalled())
@@ -82,7 +82,7 @@ class OpenBlasTest {
     }
 
     @Test
-    fun `solve на 1024 совпадает с JVM-реализацией и даёт малую невязку`() {
+    fun `solve on 1024 matches the JVM implementation and gives a small residual`() {
         val n = 1024
         val rows = diagonallyDominant(n)
         val a = DenseMatrix.fromRows(rows)
@@ -91,7 +91,7 @@ class OpenBlasTest {
         val start = System.nanoTime()
         val x = LinearAlgebra.solve(a, b, Backends.default())
         val elapsedMs = (System.nanoTime() - start) / 1e6
-        println("OpenBLAS: solve n=$n за %.1f мс (%s)".format(elapsedMs, Backends.default().name))
+        println("OpenBLAS: solve n=$n in %.1f ms (%s)".format(elapsedMs, Backends.default().name))
 
         val residual = DoubleArray(n) { i ->
             var s = 0.0
@@ -100,22 +100,22 @@ class OpenBlasTest {
         }
         val normA = Conditioning.matrixNormInf(a, Backends.default())
         val bound = 1e-10 * (normA * maxAbs(x) + maxAbs(b))
-        assertTrue(maxAbs(residual) <= bound, "невязка ${maxAbs(residual)} > $bound")
+        assertTrue(maxAbs(residual) <= bound, "residual ${maxAbs(residual)} > $bound")
 
         val xJava = LinearAlgebra.solve(a, b, Backends.java())
-        assertTrue(maxAbsDiff(x, xJava) <= 1e-10 * maxAbs(xJava), "расхождение с JVM-реализацией ${maxAbsDiff(x, xJava)}")
+        assertTrue(maxAbsDiff(x, xJava) <= 1e-10 * maxAbs(xJava), "discrepancy with the JVM implementation ${maxAbsDiff(x, xJava)}")
     }
 
     @Test
-    fun `symmetricEigenvalues на 256 совпадает с JVM-реализацией`() {
+    fun `symmetricEigenvalues on 256 matches the JVM implementation`() {
         val a = DenseMatrix.fromRows(symmetric(256))
         val native = Conditioning.symmetricEigenvalues(a, Backends.default())
         val java = Conditioning.symmetricEigenvalues(a, Backends.java())
-        assertTrue(maxAbsDiff(native, java) <= 1e-10 * max(1.0, maxAbs(java)), "расхождение ${maxAbsDiff(native, java)}")
+        assertTrue(maxAbsDiff(native, java) <= 1e-10 * max(1.0, maxAbs(java)), "discrepancy ${maxAbsDiff(native, java)}")
     }
 
     @Test
-    fun `cholesky на 256 совпадает с JVM-реализацией`() {
+    fun `cholesky on 256 matches the JVM implementation`() {
         val n = 256
         val b = DenseMatrix.fromRows(symmetric(n))
         val ones = DoubleArray(n) { 1.0 }
@@ -126,11 +126,11 @@ class OpenBlasTest {
 
         val native = assertNotNull(LinearAlgebra.cholesky(spd, Backends.default()))
         val java = assertNotNull(LinearAlgebra.cholesky(spd, Backends.java()))
-        assertTrue(maxAbsDiff(native.data, java.data) <= 1e-10 * max(1.0, maxAbs(java.data)), "расхождение ${maxAbsDiff(native.data, java.data)}")
+        assertTrue(maxAbsDiff(native.data, java.data) <= 1e-10 * max(1.0, maxAbs(java.data)), "discrepancy ${maxAbsDiff(native.data, java.data)}")
     }
 
     @Test
-    fun `повторная установка идемпотентна`() {
+    fun `repeated install is idempotent`() {
         val lapack = System.getProperty("dev.ludovic.netlib.lapack.nativeLibPath")
         val blas = System.getProperty("dev.ludovic.netlib.blas.nativeLibPath")
         assertTrue(OpenBlas.install())

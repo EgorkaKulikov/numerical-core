@@ -12,7 +12,7 @@ import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 
-/** Эталон `quadrature.json`: узлы/веса `gaussLegendreReference(m)` и составная квадратура. */
+/** Golden reference `quadrature.json`: nodes/weights of `gaussLegendreReference(m)` and the composite quadrature. */
 @Tag("fast")
 class GoldenQuadratureTest {
 

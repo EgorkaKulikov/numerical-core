@@ -8,26 +8,26 @@ import numerics.LinearAlgebra
 import numerics.backend.Backends
 
 /**
- * Генераторы jqwik для property-based тестов: квадратные матрицы общего вида,
- * симметричные, SPD, векторы и масштабирование для проверки относительности порогов.
+ * jqwik generators for property-based tests: general square matrices,
+ * symmetric and SPD matrices, vectors, and scaling for checking that thresholds are relative.
  */
 object Generators {
 
-    /** Граница числа обусловленности, выше которой матрица считается «почти вырожденной» и отсеивается. */
+    /** Condition number bound above which a matrix is considered “nearly singular” and discarded. */
     const val MAX_COND = 1e12
 
     private fun entries(count: Int): Arbitrary<DoubleArray> =
         Arbitraries.doubles().between(-10.0, 10.0).array(DoubleArray::class.java).ofSize(count)
 
-    /** Квадратная матрица n×n со случайными элементами из [-10, 10] (без сдвига диагонали). */
+    /** Square n×n matrix with random entries from [-10, 10] (no diagonal shift). */
     fun rawSquare(minN: Int = 1, maxN: Int = 24): Arbitrary<DenseMatrix> =
         Arbitraries.integers().between(minN, maxN).flatMap { n ->
             entries(n * n).map { DenseMatrix.fromColumnMajor(n, n, it) }
         }
 
     /**
-     * Квадратная матрица общего вида: половина матриц получает сдвиг диагонали n·10 (диагональное
-     * преобладание), половина — нет. Почти вырожденные (cond∞ ≥ [MAX_COND]) отсеиваются.
+     * General square matrix: half of the matrices get a diagonal shift of n·10 (diagonal
+     * dominance), the other half do not. Nearly singular ones (cond∞ ≥ [MAX_COND]) are discarded.
      */
     fun squareGeneral(minN: Int = 1, maxN: Int = 24): Arbitrary<DenseMatrix> =
         rawSquare(minN, maxN).flatMap { a ->
@@ -45,7 +45,7 @@ object Generators {
             c.isFinite() && c < MAX_COND
         }
 
-    /** Симметричная положительно определённая матрица Bᵀ·B + n·I. */
+    /** Symmetric positive definite matrix Bᵀ·B + n·I. */
     fun spd(minN: Int = 1, maxN: Int = 24): Arbitrary<DenseMatrix> =
         rawSquare(minN, maxN).map { b ->
             val n = b.rows
@@ -55,21 +55,21 @@ object Generators {
             s
         }
 
-    /** Симметричная матрица (B + Bᵀ)/2. */
+    /** Symmetric matrix (B + Bᵀ)/2. */
     fun symmetric(minN: Int = 1, maxN: Int = 24): Arbitrary<DenseMatrix> =
         rawSquare(minN, maxN).map { b -> DenseMatrix.build(b.rows, b.rows) { i, j -> 0.5 * (b[i, j] + b[j, i]) } }
 
-    /** Вектор длины n с элементами из [-10, 10]. */
+    /** Vector of length n with entries from [-10, 10]. */
     fun vector(n: Int): Arbitrary<DoubleArray> = entries(n)
 
-    /** Матрица и согласованный по размеру вектор правой части. */
+    /** Matrix together with a right-hand side vector of matching size. */
     fun systemGeneral(minN: Int = 1, maxN: Int = 24): Arbitrary<Pair<DenseMatrix, DoubleArray>> =
         squareGeneral(minN, maxN).flatMap { a -> vector(a.rows).map { a to it } }
 
-    /** Масштабы для проверки относительности порогов. */
+    /** Scale factors for checking that thresholds are relative. */
     val SCALES: List<Double> = listOf(1e-8, 1.0, 1e8)
 
-    /** Все элементы матрицы умножены на один из масштабов [scales]. */
+    /** All matrix entries multiplied by one of the factors in [scales]. */
     fun scaled(arb: Arbitrary<DenseMatrix>, scales: List<Double> = SCALES): Arbitrary<Pair<DenseMatrix, Double>> =
         arb.flatMap { a -> Arbitraries.of(scales).map { c -> scale(a, c) to c } }
 

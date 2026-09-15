@@ -6,12 +6,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Инкапсуляция эталонных массивов квадратуры: [GaussLegendre.refNodesWeights] обязан
- * отдавать копию, чтобы изменение массива у вызывающего не портило источник.
+ * Encapsulation of the reference quadrature arrays: [GaussLegendre.refNodesWeights] must
+ * return a copy so that a caller mutating the array cannot corrupt the source.
  *
- * Если бы наружу уходили сами внутренние массивы, одна запись в них незаметно меняла бы
- * квадратуру сразу для всех пользователей объекта — без исключения, просто получались бы
- * другие числа.
+ * If the internal arrays themselves were handed out, a single write into them would silently
+ * change the quadrature for every user of the object — no exception, just different numbers.
  */
 @Tag("fast")
 class QuadratureDefensiveCopyTest {
@@ -26,8 +25,8 @@ class QuadratureDefensiveCopyTest {
         weights[0] = -777.0
 
         val (nodesAgain, weightsAgain) = quad.refNodesWeights()
-        assertTrue(nodesBefore.contentEquals(nodesAgain), "узлы квадратуры изменились после мутации копии")
-        assertTrue(weightsBefore.contentEquals(weightsAgain), "веса квадратуры изменились после мутации копии")
+        assertTrue(nodesBefore.contentEquals(nodesAgain), "quadrature nodes changed after mutating the copy")
+        assertTrue(weightsBefore.contentEquals(weightsAgain), "quadrature weights changed after mutating the copy")
     }
 
     @Test fun mutatingRefNodesDoesNotAffectIntegral() {
@@ -41,6 +40,6 @@ class QuadratureDefensiveCopyTest {
 
         val after = quad.integrate(bp) { t -> t * t }
         assertEquals(exact, before, 1e-14)
-        assertEquals(before, after, 0.0, "интеграл изменился после мутации возвращённых узлов/весов")
+        assertEquals(before, after, 0.0, "integral changed after mutating the returned nodes/weights")
     }
 }

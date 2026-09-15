@@ -1,24 +1,24 @@
 # numerical-core-openblas
 
-## Назначение
+## Purpose
 
-Модуль подключает к `numerical-core` упакованную реализацию BLAS/LAPACK — OpenBLAS.
-Он предназначен для машин без системной реализации BLAS/LAPACK: рабочих станций,
-ноутбуков, контейнеров с минимальным образом. На вычислительных кластерах с установленными
-MKL, AOCL или OpenBLAS модуль не требуется: библиотека использует системную реализацию.
+This module supplies `numerical-core` with a bundled BLAS/LAPACK implementation — OpenBLAS.
+It is intended for machines without a system BLAS/LAPACK implementation: workstations,
+laptops, containers built from a minimal image. On compute clusters with MKL, AOCL or
+OpenBLAS installed the module is not needed: the library uses the system implementation.
 
-## Подключение
+## Setup
 
 ```kotlin
-implementation("io.github.egorkakulikov:numerical-core-openblas:<версия>")
+implementation("io.github.egorkakulikov:numerical-core-openblas:<version>")
 ```
 
-Зависимость на `numerical-core` добавляется транзитивно.
+The dependency on `numerical-core` is added transitively.
 
-## Использование
+## Usage
 
-Метод `OpenBlas.install()` вызывается до первого обращения к библиотеке, поскольку путь
-к машинно-зависимой реализации читается один раз при инициализации:
+Call `OpenBlas.install()` before the first use of the library, because the path
+to the native implementation is read once, at initialization:
 
 ```kotlin
 fun main() {
@@ -27,27 +27,27 @@ fun main() {
 }
 ```
 
-Без этого модуля тот же результат достигается заданием системных свойств
-`dev.ludovic.netlib.blas.nativeLibPath` и `dev.ludovic.netlib.lapack.nativeLibPath`,
-содержащих полный путь к файлу библиотеки.
+Without this module the same effect is achieved by setting the system properties
+`dev.ludovic.netlib.blas.nativeLibPath` and `dev.ludovic.netlib.lapack.nativeLibPath`
+to the full path of the library file.
 
-## Потоки и стек
+## Threads and stack
 
-По умолчанию OpenBLAS использует `min(число ядер, 4)` потоков: на процессорах с
-разнородными ядрами большее число потоков замедляет разложения. Число потоков задаётся
-параметром `OpenBlas.install(threads = …)`.
+By default OpenBLAS uses `min(number of cores, 4)` threads: on processors with
+heterogeneous cores a larger thread count slows the factorizations down. The thread count
+is set with the `OpenBlas.install(threads = …)` parameter.
 
-При `threads > 1` вызывающему потоку требуется стек не менее 4 МБ: JVM запускается
-с параметром `-Xss4m`, либо решение больших систем выполняется в потоке с явно заданным
-размером стека — `Thread(null, r, "lapack", 8L shl 20)`. В противном случае внутри
-OpenBLAS возможен аварийный останов JVM.
+With `threads > 1` the calling thread needs a stack of at least 4 MB: start the JVM
+with `-Xss4m`, or solve large systems in a thread with an explicit stack size —
+`Thread(null, r, "lapack", 8L shl 20)`. Otherwise the JVM may crash inside
+OpenBLAS.
 
-## Размер и платформы
+## Size and platforms
 
-Зависимость добавляет 13–48 МБ на платформу. Поддерживаются linux-x86_64, linux-arm64,
+The dependency adds 13–48 MB per platform. Supported platforms: linux-x86_64, linux-arm64,
 macosx-arm64, macosx-x86_64, windows-x86_64.
 
-## Проверка
+## Verification
 
-После вызова `OpenBlas.install()` метод `Backends.describe()` возвращает описание
-машинно-зависимой реализации OpenBLAS.
+After `OpenBlas.install()` the `Backends.describe()` method returns the description of the
+native OpenBLAS implementation.

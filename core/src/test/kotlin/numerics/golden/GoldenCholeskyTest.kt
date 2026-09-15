@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 import kotlin.test.assertNotNull
 
-/** Эталон `cholesky.json`: нижний треугольный множитель `L` для SPD-матриц. */
+/** Golden reference `cholesky.json`: the lower triangular factor `L` of SPD matrices. */
 @Tag("fast")
 class GoldenCholeskyTest {
 
@@ -23,7 +23,7 @@ class GoldenCholeskyTest {
             DynamicTest.dynamicTest("cholesky ${case.key}") {
                 val exp = obj(entry(golden, case.key))
                 val l = LinearAlgebra.cholesky(case.matrix())
-                assertNotNull(l, "${case.key}: cholesky вернул null")
+                assertNotNull(l, "${case.key}: cholesky returned null")
                 assertClose(toMat(exp["L"]), l, DEFAULT_TOL, "${case.key}.L")
             }
         }

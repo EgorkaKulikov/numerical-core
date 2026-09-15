@@ -38,7 +38,7 @@ class ConditioningPropertyTest {
     @Provide fun sources(): Arbitrary<ConditionSource> = Arbitraries.of(ConditionSource.INVERSION, ConditionSource.ESTIMATE)
 
     @Property(tries = 100)
-    fun `сумма собственных значений равна следу и совпадает с Hipparchus`(@ForAll("symmetric") s: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
+    fun `eigenvalues sum to the trace and match Hipparchus`(@ForAll("symmetric") s: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
         val lambda = Conditioning.symmetricEigenvalues(s, backend)
         var trace = 0.0
         for (i in 0 until s.rows) trace += s[i, i]
@@ -49,9 +49,9 @@ class ConditioningPropertyTest {
     }
 
     @Property(tries = 100)
-    fun `SPD имеет положительный спектр и conditionSymmetric равен λmax÷λmin`(@ForAll("spd") a: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
+    fun `SPD has a positive spectrum and conditionSymmetric equals λmax÷λmin`(@ForAll("spd") a: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
         val lambda = Conditioning.symmetricEigenvalues(a, backend)
-        for (v in lambda) assertTrue(v > 0.0) { "λ = $v ≤ 0 для SPD" }
+        for (v in lambda) assertTrue(v > 0.0) { "λ = $v ≤ 0 for an SPD matrix" }
         val ref = HipparchusOracle.symmetricEigenvalues(a)
         val expected = ref.max() / ref.min()
         val got = Conditioning.conditionSymmetric(a, backend)
@@ -59,28 +59,28 @@ class ConditioningPropertyTest {
     }
 
     @Property(tries = 100)
-    fun `число обусловленности не меньше единицы`(@ForAll("squares") a: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
+    fun `condition number is at least one`(@ForAll("squares") a: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
         assertTrue(Conditioning.conditionInf(a, backend = backend).condInf >= 1.0 - 1e-12)
         assertTrue(Conditioning.conditionEstimate(a, backend = backend).condInf >= 1.0 - 1e-12)
     }
 
     @Property(tries = 100)
-    fun `оценка cond∞ лежит в окне относительно точного cond₁`(@ForAll("squares") a: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
+    fun `cond∞ estimate lies within a window of the exact cond₁`(@ForAll("squares") a: DenseMatrix, @ForAll("backends") backend: LinAlgBackend) {
         val cond1 = HipparchusOracle.condition1(a)
         Assume.that(cond1 < 1e10)
         val ratio = Conditioning.conditionEstimate(a, backend = backend).condInf / cond1
-        assertTrue(ratio >= 0.01 && ratio <= 1.0001) { "condEst/cond1 = $ratio вне [0.01, 1.0001] (n=${a.rows})" }
+        assertTrue(ratio >= 0.01 && ratio <= 1.0001) { "condEst/cond1 = $ratio outside [0.01, 1.0001] (n=${a.rows})" }
     }
 
     @Property(tries = 100)
-    fun `обратная ошибка решения на уровне машинной точности`(@ForAll("systems") s: Pair<DenseMatrix, DoubleArray>, @ForAll("backends") backend: LinAlgBackend) {
+    fun `backward error of the solution is at machine precision`(@ForAll("systems") s: Pair<DenseMatrix, DoubleArray>, @ForAll("backends") backend: LinAlgBackend) {
         val (a, b) = s
         val omega = Conditioning.relativeBackwardError(a, b, LinearAlgebra.solve(a, b, backend), backend)
         assertTrue(omega <= 1e-12) { "ω = $omega" }
     }
 
     @Property(tries = 100)
-    fun `forwardError ограничен тогда и только тогда, когда оценка достоверна`(@ForAll("squares") a: DenseMatrix, @ForAll("omegas") omega: Double, @ForAll("backends") backend: LinAlgBackend) {
+    fun `forwardError is bounded iff the estimate is reliable`(@ForAll("squares") a: DenseMatrix, @ForAll("omegas") omega: Double, @ForAll("backends") backend: LinAlgBackend) {
         val est = Conditioning.conditionInf(a, backend = backend)
         val fe = Conditioning.forwardError(est, omega)
         assertEquals(est.isReliable, fe is ForwardError.Bounded) { "isReliable=${est.isReliable}, forwardError=$fe" }
@@ -90,14 +90,14 @@ class ConditioningPropertyTest {
     }
 
     @Property(tries = 100)
-    fun `solveDiagnosed возвращает то же x, что и solve`(@ForAll("systems") s: Pair<DenseMatrix, DoubleArray>, @ForAll("sources") source: ConditionSource, @ForAll("backends") backend: LinAlgBackend) {
+    fun `solveDiagnosed returns the same x as solve`(@ForAll("systems") s: Pair<DenseMatrix, DoubleArray>, @ForAll("sources") source: ConditionSource, @ForAll("backends") backend: LinAlgBackend) {
         val (a, b) = s
         val x = LinearAlgebra.solve(a, b, backend)
-        assertTrue(LinearAlgebra.solveDiagnosed(a, b, backend, source).x.contentEquals(x)) { "x расходится для $source" }
+        assertTrue(LinearAlgebra.solveDiagnosed(a, b, backend, source).x.contentEquals(x)) { "x differs for $source" }
     }
 
     @Property(tries = 100)
-    fun `solveDiagnosed по спектру возвращает то же x на SPD`(@ForAll("spdSystems") s: Pair<DenseMatrix, DoubleArray>, @ForAll("backends") backend: LinAlgBackend) {
+    fun `solveDiagnosed via spectrum returns the same x on SPD`(@ForAll("spdSystems") s: Pair<DenseMatrix, DoubleArray>, @ForAll("backends") backend: LinAlgBackend) {
         val (a, b) = s
         val x = LinearAlgebra.solve(a, b, backend)
         assertTrue(LinearAlgebra.solveDiagnosed(a, b, backend, ConditionSource.SYMMETRIC_SPECTRUM).x.contentEquals(x))

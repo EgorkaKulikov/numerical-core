@@ -9,9 +9,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.Random
 
-// Измерения производительности основных операций на DenseMatrix. Входы — те же генераторы, что и в golden-эталонах
-// (java.util.Random(1000 + n) для матрицы, Random(2000 + n) для вектора); матрица строго
-// диагонально доминирующая. Преобразование в DenseMatrix выполняется один раз вне измеряемого блока.
+// Performance measurements of the core DenseMatrix operations. Inputs come from the same generators as the golden references
+// (java.util.Random(1000 + n) for the matrix, Random(2000 + n) for the vector); the matrix is strictly
+// diagonally dominant. Conversion to DenseMatrix is done once, outside the timed block.
 
 @Volatile
 private var sink: Any? = null
@@ -58,7 +58,7 @@ private fun median(warm: Int, reps: Int, block: () -> Any?): Double {
 private fun fmt(ms: Double?): String =
     if (ms == null) "—" else String.format(Locale.ROOT, "%.2f", ms)
 
-/** Точка входа измерений производительности; аргументы — размеры матриц, по умолчанию 256 и 1024. */
+/** Benchmark entry point; arguments are matrix sizes, default 256 and 1024. */
 public fun main(args: Array<String>) {
     val sizes = (if (args.isEmpty()) listOf("256", "1024") else args.toList()).map { it.trim().toInt() }
     println("backend: ${Backends.default().name}")
@@ -67,8 +67,8 @@ public fun main(args: Array<String>) {
     println("os.arch: ${System.getProperty("os.arch")}")
     println("date: ${ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}")
     println()
-    println("Время в мс: медиана из 5 замеров после 3 прогревов (conditionInf и symmetricEigenvalues — медиана из 3).")
-    println("conditionInf и symmetricEigenvalues измеряются только при n ≤ 1024; иначе «—».")
+    println("Time in ms: median of 5 runs after 3 warm-ups (conditionInf and symmetricEigenvalues: median of 3).")
+    println("conditionInf and symmetricEigenvalues are measured only for n ≤ 1024; otherwise "—".")
     println()
     println("| n | solve | matMat | matVec | matTransVec | atWa | conditionInf | conditionEstimate | symmetricEigenvalues |")
     println("|---:|---:|---:|---:|---:|---:|---:|---:|---:|")

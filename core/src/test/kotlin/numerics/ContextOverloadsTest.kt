@@ -13,7 +13,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Перегрузки с [NumericsContext] побитово совпадают с перегрузками, принимающими бэкенд напрямую. */
+/** Overloads taking a [NumericsContext] agree bit-for-bit with the overloads taking a backend directly. */
 @Tag("fast")
 class ContextOverloadsTest {
 
@@ -27,7 +27,7 @@ class ContextOverloadsTest {
     private fun bits(x: DenseMatrix) = x.rows to x.cols to bits(x.data)
 
     @TestFactory
-    fun `перегрузки с контекстом равны перегрузкам с бэкендом`(): List<DynamicTest> =
+    fun `context overloads equal backend overloads`(): List<DynamicTest> =
         Backends.available().flatMap { backend -> cases(backend, NumericsContext(backend = backend)) }
 
     private fun cases(be: LinAlgBackend, ctx: NumericsContext): List<DynamicTest> {
@@ -60,7 +60,7 @@ class ContextOverloadsTest {
     }
 
     @Test
-    fun `inverse через контекст возвращает null на вырожденной, а инверсия вырожденной и NaN отсекается`() {
+    fun `inverse via context returns null on singular matrix and NaN inputs are rejected`() {
         val singular = DenseMatrix.fromRows(arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(2.0, 4.0)))
         assertNull(Conditioning.inverse(singular, NumericsContext()))
         assertEquals(Double.POSITIVE_INFINITY, Conditioning.conditionEstimate(singular).condInf)
@@ -68,7 +68,7 @@ class ContextOverloadsTest {
         val tol = assertFailsWith<IllegalArgumentException> { Conditioning.conditionEstimate(singular, tolerance = 0.0) }
         assertTrue(tol.message!!.contains("tolerance"), tol.message)
         val huge = DenseMatrix.diagonal(doubleArrayOf(1e-320, 1.0))
-        assertNull(Conditioning.inverse(huge), "обращение с переполнением — нечисловое, а не мусор")
+        assertNull(Conditioning.inverse(huge), "inversion with overflow must yield null, not garbage")
         val r = Conditioning.inversionResidual(
             arrayOf(doubleArrayOf(2.0, 0.0), doubleArrayOf(0.0, 4.0)),
             arrayOf(doubleArrayOf(0.5, 0.0), doubleArrayOf(0.0, 0.25)),
@@ -77,19 +77,19 @@ class ContextOverloadsTest {
         val e = assertFailsWith<IllegalArgumentException> { ConditionEstimate(1.0, 0.0, 0.0) }
         assertTrue(e.message!!.contains("tolerance"), e.message)
         val nan = assertFailsWith<IllegalArgumentException> { Conditioning.forwardError(ConditionEstimate(1.0, 0.0, 1e-8), Double.NaN) }
-        assertTrue(nan.message!!.contains("конечной"), nan.message)
+        assertTrue(nan.message!!.contains("finite"), nan.message)
     }
 
     @Test
-    fun `адаптеры над массивами строк проверяют пустую B и число строк`() {
+    fun `row-array adapters reject empty B and mismatched row counts`() {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0))
-        assertTrue(assertFailsWith<IllegalArgumentException> { LinearAlgebra.matMat(a, arrayOf(DoubleArray(0))) }.message!!.contains("пустая"))
-        assertTrue(assertFailsWith<IllegalArgumentException> { LinearAlgebra.matMat(a, emptyArray()) }.message!!.contains("пустая"))
-        assertTrue(assertFailsWith<IllegalArgumentException> { LinearAlgebra.addScaled(a, arrayOf(doubleArrayOf(1.0, 2.0)), 1.0) }.message!!.contains("строк"))
+        assertTrue(assertFailsWith<IllegalArgumentException> { LinearAlgebra.matMat(a, arrayOf(DoubleArray(0))) }.message!!.contains("is empty"))
+        assertTrue(assertFailsWith<IllegalArgumentException> { LinearAlgebra.matMat(a, emptyArray()) }.message!!.contains("is empty"))
+        assertTrue(assertFailsWith<IllegalArgumentException> { LinearAlgebra.addScaled(a, arrayOf(doubleArrayOf(1.0, 2.0)), 1.0) }.message!!.contains("row counts"))
     }
 
     @Test
-    fun `сборка через контекст с отдельным пулом совпадает с последовательной`() {
+    fun `assembly via context with a dedicated pool matches sequential assembly`() {
         val n = 37
         val ctx = NumericsContext(parallel = true, parallelism = 2)
         val seq = ParallelAssembly.assembleMatrix(n, n, parallel = false) { i, j -> 1.0 / (i + j + 1) }
@@ -101,6 +101,6 @@ class ContextOverloadsTest {
         val dense = ParallelAssembly.assembleDense(n, n, ctx) { i, j -> 1.0 / (i + j + 1) }
         assertEquals(DenseMatrix.fromRows(seq), dense)
         val e = assertFailsWith<IllegalArgumentException> { ParallelAssembly.assembleRows(-1, 2, ctx) { DoubleArray(2) } }
-        assertTrue(e.message!!.contains("отрицательными"), e.message)
+        assertTrue(e.message!!.contains("non-negative"), e.message)
     }
 }

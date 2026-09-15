@@ -75,8 +75,8 @@ Linux, macOS, Windows с установленной виртуальной ма�
 ## Состав материалов для депонирования
 
 - исходный код: каталоги `core/src/main` и `openblas/src/main`;
-- документация: `README.md`, `docs/ТОЧНОСТЬ.md`, `docs/ПРОИЗВОДИТЕЛЬНОСТЬ.md`,
-  `docs/ИСТОЧНИКИ.md`, `openblas/README.md`, документация API (`./gradlew :numerical-core:dokkaHtml`);
+- документация: `README.md`, `docs/ACCURACY.md`, `docs/PERFORMANCE.md`,
+  `docs/SOURCES.md`, `openblas/README.md`, документация API (`./gradlew :numerical-core:dokkaHtml`);
 - результаты тестирования: 697 тестов основного модуля и 7 тестов модуля OpenBLAS, отчёт о
   покрытии Kover (`./gradlew build`, каталог `core/build/reports/kover`);
 - лицензия: Apache License 2.0 (`LICENSE`, `NOTICE`).

@@ -9,26 +9,26 @@ plugins {
 }
 
 dependencies {
-    // Линейная алгебра через BLAS/LAPACK (netlib): нативная реализация берётся из системы
-    // (Accelerate, OpenBLAS, MKL), при её отсутствии используется переносимая реализация на Java.
-    // Типы netlib не выходят в публичный API (`NetlibBackend` реализует наш `LinAlgBackend`),
-    // поэтому зависимость — `implementation`, а не `api`: потребителю она нужна лишь в runtime.
+    // Linear algebra via BLAS/LAPACK (netlib): the native implementation is taken from the system
+    // (Accelerate, OpenBLAS, MKL); when it is absent, the portable Java implementation is used.
+    // netlib types do not leak into the public API (`NetlibBackend` implements our `LinAlgBackend`),
+    // so the dependency is `implementation`, not `api`: consumers need it only at runtime.
     implementation("dev.ludovic.netlib:blas:3.2.0")
     implementation("dev.ludovic.netlib:lapack:3.2.0")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
-    // Property-based тесты (jqwik работает на JUnit Platform, теги транслируются в теги платформы)
+    // Property-based tests (jqwik runs on the JUnit Platform; its tags map to platform tags)
     testImplementation("net.jqwik:jqwik:1.9.2")
-    // Независимый оракул для линейной алгебры и квадратур Гаусса–Лежандра
+    // Independent oracle for linear algebra and Gauss–Legendre quadrature
     testImplementation("org.hipparchus:hipparchus-core:4.0.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 kotlin {
     jvmToolchain(21)
-    // Явная видимость и явные типы у всех публичных объявлений: поверхность API
-    // фиксируется в исходном коде, а не по умолчанию компилятора.
+    // Explicit visibility and explicit types on all public declarations: the API surface
+    // is fixed in the source code rather than by compiler defaults.
     explicitApi()
 }
 
@@ -36,12 +36,12 @@ java {
     withSourcesJar()
 }
 
-// --- Реализация линейной алгебры в тестах -------------------------------------
-// Свойство `numerics.backend` выбирает реализацию BLAS/LAPACK: `native` — только
-// системная библиотека (ошибка, если не загрузилась), `java` — только переносимая
-// реализация на Java, `auto` — нативная при доступности, иначе Java с предупреждением.
-// Значение берётся из `-Pnumerics.backend=...` либо `-Dnumerics.backend=...`, по
-// умолчанию `auto`; так один и тот же набор тестов прогоняется на обеих реализациях.
+// --- Linear algebra implementation in tests -----------------------------------
+// The `numerics.backend` property selects the BLAS/LAPACK implementation: `native` — the
+// system library only (an error if it fails to load), `java` — the portable Java
+// implementation only, `auto` — native when available, otherwise Java with a warning.
+// The value comes from `-Pnumerics.backend=...` or `-Dnumerics.backend=...`, defaulting
+// to `auto`; this way the same test suite runs on both implementations.
 val numericsBackend: String =
     (project.findProperty("numerics.backend") as String?)
         ?: System.getProperty("numerics.backend")
@@ -50,24 +50,24 @@ val numericsBackend: String =
 tasks.test {
     useJUnitPlatform { excludeTags("golden-generate") }
     systemProperty("numerics.backend", numericsBackend)
-    // Проброс переключателей netlib в тестовую JVM: `-Ddev.ludovic.netlib.{blas,lapack}.allowNative=false`
-    // принудительно включает F2J и позволяет локально воспроизвести CI без системной BLAS/LAPACK.
+    // Pass netlib switches through to the test JVM: `-Ddev.ludovic.netlib.{blas,lapack}.allowNative=false`
+    // forces F2J and lets CI be reproduced locally without a system BLAS/LAPACK.
     listOf("dev.ludovic.netlib.lapack.allowNative", "dev.ludovic.netlib.blas.allowNative").forEach { key ->
         System.getProperty(key)?.let { systemProperty(key, it) }
     }
-    // Многопоточные LU-разложения системного OpenBLAS используют стек вызывающего
-    // потока; стандартного размера может не хватить.
+    // Multithreaded LU factorizations in the system OpenBLAS use the calling thread's
+    // stack; the default size may be insufficient.
     jvmArgs("-Xss8m")
 }
 
 /**
- * Быстрый набор (тег `fast`). В этой библиотеке все тесты быстрые, и `fastTest`
- * совпадает с `test` по составу; задача сохранена как отдельная точка запуска
- * подмножества тестов, помеченных тегом.
+ * Fast suite (tag `fast`). In this library all tests are fast, and `fastTest`
+ * has the same contents as `test`; the task is kept as a separate entry point for
+ * running the subset of tests marked with the tag.
  */
 tasks.register<Test>("fastTest") {
     group = "verification"
-    description = "Быстрый набор тестов (тег fast)"
+    description = "Fast test suite (tag fast)"
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
@@ -75,23 +75,23 @@ tasks.register<Test>("fastTest") {
         excludeTags("golden-generate")
     }
     systemProperty("numerics.backend", numericsBackend)
-    // Проброс переключателей netlib в тестовую JVM: `-Ddev.ludovic.netlib.{blas,lapack}.allowNative=false`
-    // принудительно включает F2J и позволяет локально воспроизвести CI без системной BLAS/LAPACK.
+    // Pass netlib switches through to the test JVM: `-Ddev.ludovic.netlib.{blas,lapack}.allowNative=false`
+    // forces F2J and lets CI be reproduced locally without a system BLAS/LAPACK.
     listOf("dev.ludovic.netlib.lapack.allowNative", "dev.ludovic.netlib.blas.allowNative").forEach { key ->
         System.getProperty(key)?.let { systemProperty(key, it) }
     }
-    // Многопоточные LU-разложения системного OpenBLAS используют стек вызывающего
-    // потока; стандартного размера может не хватить.
+    // Multithreaded LU factorizations in the system OpenBLAS use the calling thread's
+    // stack; the default size may be insufficient.
     jvmArgs("-Xss8m")
 }
 
 /**
- * Перегенерация golden-эталонов поведения (JSON-файлы в `src/test/resources/golden`).
- * Тег `golden-generate` исключён из `test`/`fastTest`; запускать только при намеренном
- * изменении поведения. Подробности — в `src/test/resources/golden/README.md`.
+ * Regenerates the golden behavior references (JSON files in `src/test/resources/golden`).
+ * The `golden-generate` tag is excluded from `test`/`fastTest`; run only on a deliberate
+ * behavior change. Details: `src/test/resources/golden/README.md`.
  */
 tasks.register<Test>("regenerateGolden") {
-    description = "Перегенерировать эталоны поведения в src/test/resources/golden"
+    description = "Regenerate the golden behavior references in src/test/resources/golden"
     group = "verification"
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
@@ -99,8 +99,8 @@ tasks.register<Test>("regenerateGolden") {
     systemProperty("golden.dir", layout.projectDirectory.dir("src/test/resources/golden").asFile.absolutePath)
     systemProperty("golden.version", project.version.toString())
     systemProperty("numerics.backend", numericsBackend)
-    // Многопоточные LU-разложения системного OpenBLAS используют стек вызывающего
-    // потока; стандартного размера может не хватить.
+    // Multithreaded LU factorizations in the system OpenBLAS use the calling thread's
+    // stack; the default size may be insufficient.
     jvmArgs("-Xss8m")
     outputs.upToDateWhen { false }
 }
@@ -108,12 +108,12 @@ tasks.register<Test>("regenerateGolden") {
 kover {
     currentProject {
         instrumentation {
-            // Источник покрытия — `test`; `fastTest` дублирует его состав.
+            // Coverage source is `test`; `fastTest` duplicates its contents.
             disabledForTestTasks.add("fastTest")
             disabledForTestTasks.add("regenerateGolden")
         }
         sources {
-            // Измерения производительности — не библиотечный код, в покрытии не участвуют.
+            // Performance measurements are not library code and do not count towards coverage.
             excludedSourceSets.add("benchmark")
         }
     }
@@ -123,14 +123,14 @@ kover {
                 packages("numerics.bench")
             }
         }
-        // Планка покрытия: проверяется задачей `koverVerify`, входящей в `check`.
-        // Замер при обеих доступных реализациях: строки 91.9 %, ветви 85.6 %;
-        // порог — фактическое значение минус 2 %, чтобы результат не зависел от машины.
+        // Coverage bar: checked by the `koverVerify` task, which is part of `check`.
+        // Measured on both available implementations: lines 91.9 %, branches 85.6 %;
+        // the threshold is the actual value minus 2 %, so the result does not depend on the machine.
         verify {
-            rule("Покрытие строк") {
+            rule("Line coverage") {
                 minBound(97)
             }
-            rule("Покрытие ветвей") {
+            rule("Branch coverage") {
                 bound {
                     minValue = 93
                     coverageUnits = CoverageUnit.BRANCH
@@ -144,9 +144,9 @@ tasks.check {
     dependsOn("koverVerify")
 }
 
-// --- Документация -------------------------------------------------------------
-// HTML-документация публичного API: ./gradlew :numerical-core:dokkaHtml
-// (результат в build/dokka/html). Публичные символы без KDoc выводятся предупреждениями.
+// --- Documentation ------------------------------------------------------------
+// HTML documentation of the public API: ./gradlew :numerical-core:dokkaHtml
+// (output in build/dokka/html). Public symbols without KDoc are reported as warnings.
 tasks.dokkaHtml {
     moduleName.set("numerical-core")
     dokkaSourceSets.configureEach {
@@ -156,11 +156,11 @@ tasks.dokkaHtml {
     }
 }
 
-// --- Публикация ---------------------------------------------------------------
-// Локальная проверка: ./gradlew publishToMavenLocal
-// Удалённый репозиторий — GitHub Packages. Учётные данные берутся из переменных
-// окружения GITHUB_ACTOR/GITHUB_TOKEN (CI) или свойств Gradle gpr.user/gpr.token;
-// при их отсутствии publishToMavenLocal работает как прежде.
+// --- Publishing ---------------------------------------------------------------
+// Local check: ./gradlew publishToMavenLocal
+// Remote repository: GitHub Packages. Credentials come from the GITHUB_ACTOR/GITHUB_TOKEN
+// environment variables (CI) or from the Gradle properties gpr.user/gpr.token;
+// without them publishToMavenLocal works as before.
 publishing {
     publications {
         create<MavenPublication>("maven") {
@@ -169,10 +169,10 @@ publishing {
             pom {
                 name.set("numerical-core")
                 description.set(
-                    "Численные примитивы для плотных вычислений на Kotlin/JVM поверх BLAS/LAPACK " +
-                        "целевой системы: решение систем линейных уравнений с оценкой достоверности " +
-                        "результата, обусловленность, спектр симметричных матриц, разложение Холецкого, " +
-                        "составная квадратура Гаусса–Лежандра, параллельная сборка матриц.",
+                    "Numerical primitives for dense computations on Kotlin/JVM on top of the target system's " +
+                        "BLAS/LAPACK: linear system solves with a reliability estimate of the result, " +
+                        "conditioning, spectra of symmetric matrices, Cholesky factorization, " +
+                        "composite Gauss–Legendre quadrature, parallel matrix assembly.",
                 )
                 url.set("https://github.com/EgorkaKulikov/numerical-core")
                 inceptionYear.set("2026")
@@ -207,13 +207,13 @@ publishing {
     }
 }
 
-// Измерения производительности публичного API (не входят в артефакт и в test).
+// Performance measurements of the public API (not part of the artifact or of test).
 val benchmark: SourceSet by sourceSets.creating {
     compileClasspath += sourceSets["main"].output + configurations["runtimeClasspath"]
     runtimeClasspath += output + compileClasspath
 }
 tasks.register<JavaExec>("benchmark") {
-    description = "Измерения производительности публичного API; размеры матриц — через -Pbench.args=\"256 1024\""
+    description = "Performance measurements of the public API; matrix sizes via -Pbench.args=\"256 1024\""
     group = "verification"
     classpath = benchmark.runtimeClasspath
     mainClass.set("numerics.bench.BenchKt")

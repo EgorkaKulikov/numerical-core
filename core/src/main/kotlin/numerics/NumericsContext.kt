@@ -4,16 +4,16 @@ import numerics.backend.Backends
 import numerics.backend.LinAlgBackend
 
 /**
- * Параметры вычислений: реализация линейной алгебры, разрешение параллельной сборки и степень
- * параллелизма. Неизменяемое значение; передаётся во все объекты одной задачи, чтобы результаты
- * были согласованы.
+ * Computation settings: the linear algebra backend, whether parallel assembly is allowed, and the
+ * degree of parallelism. An immutable value; passed to every object of one problem so that the
+ * results are consistent.
  *
- * Сравнение по значению (`data class`): два независимо созданных контекста с одинаковыми
- * параметрами описывают одну и ту же конфигурацию и считаются совместимыми.
+ * Compared by value (`data class`): two independently created contexts with the same
+ * parameters describe the same configuration and are considered compatible.
  *
- * @param backend реализация линейной алгебры
- * @param parallel разрешена ли параллельная сборка ([ParallelAssembly])
- * @param parallelism число потоков параллельной сборки (не меньше 1)
+ * @param backend linear algebra backend
+ * @param parallel whether parallel assembly is allowed ([ParallelAssembly])
+ * @param parallelism number of threads for parallel assembly (at least 1)
  */
 public data class NumericsContext(
     val backend: LinAlgBackend = Backends.default(),
@@ -21,32 +21,32 @@ public data class NumericsContext(
     val parallelism: Int = Runtime.getRuntime().availableProcessors(),
 ) {
     init {
-        require(parallelism >= 1) { "степень параллелизма должна быть не меньше 1, получено $parallelism" }
+        require(parallelism >= 1) { "Parallelism must be at least 1, got $parallelism" }
     }
 
-    /** Контекст по умолчанию и проверка совместимости контекстов. */
+    /** Default context and context compatibility check. */
     public companion object {
         /**
-         * Разделяемый экземпляр контекста по умолчанию: один на процесс, а не на каждый вызов
-         * с параметром по умолчанию. `lazy`, потому что [Backends.default] может бросить
-         * исключение, а исключение из инициализатора класса при повторном обращении
-         * вырождается в `NoClassDefFoundError` без текста причины.
+         * Shared default context instance: one per process rather than one per call
+         * with a default parameter. `lazy` because [Backends.default] may throw,
+         * and an exception from a class initializer degenerates into a
+         * `NoClassDefFoundError` without the cause message on subsequent accesses.
          */
         private val shared: Lazy<NumericsContext> = lazy { NumericsContext() }
 
-        /** Контекст по умолчанию: стартовая реализация линейной алгебры, параллельная сборка включена. */
+        /** Default context: the default linear algebra backend with parallel assembly enabled. */
         public fun default(): NumericsContext = shared.value
 
         /**
-         * Требует, чтобы зависимость использовала тот же контекст, что и владелец. Расхождение
-         * контекстов означает, что части одной задачи будут посчитаны разными реализациями
-         * линейной алгебры, что незаметно сдвигает младшие биты результата.
+         * Requires that a dependency uses the same context as its owner. A context mismatch
+         * means that parts of one problem would be computed by different linear algebra
+         * backends, which silently shifts the low-order bits of the result.
          *
-         * @param owner имя класса-владельца для сообщения об ошибке
-         * @param expected контекст владельца
-         * @param dependency имя параметра-зависимости
-         * @param actual контекст зависимости
-         * @throws IllegalArgumentException если контексты различаются
+         * @param owner name of the owning class for the error message
+         * @param expected the owner's context
+         * @param dependency name of the dependency parameter
+         * @param actual the dependency's context
+         * @throws IllegalArgumentException if the contexts differ
          */
         public fun requireSame(
             owner: String,
@@ -55,13 +55,13 @@ public data class NumericsContext(
             actual: NumericsContext,
         ) {
             require(expected == actual) {
-                "Контекст вычислений у '$dependency' (${actual.describe()}) не совпадает с контекстом " +
-                    "у '$owner' (${expected.describe()}). Передайте один и тот же NumericsContext " +
-                    "во все связанные объекты."
+                "Numerics context of '$dependency' (${actual.describe()}) does not match the context " +
+                    "of '$owner' (${expected.describe()}). Pass the same NumericsContext " +
+                    "to all related objects"
             }
         }
     }
 
-    /** Короткое описание для сообщений об ошибках. */
+    /** Short description for error messages. */
     public fun describe(): String = "backend=${backend.name}, parallel=$parallel, parallelism=$parallelism"
 }

@@ -8,13 +8,13 @@ import org.netlib.util.doubleW
 import org.netlib.util.intW
 
 /**
- * Реализация [LinAlgBackend] поверх BLAS/LAPACK из библиотеки netlib.
+ * [LinAlgBackend] implementation over BLAS/LAPACK from the netlib library.
  *
- * Пара [blas]/[lapack] задаёт вычислительное ядро: системная библиотека через JNI
- * либо переносимая реализация на Java; интерфейс вызовов у них общий, поэтому один
- * класс обслуживает оба варианта. Матрицы [DenseMatrix] хранятся в столбцовом порядке,
- * и их массивы передаются в ядро напрямую; где LAPACK пишет результат на место входа,
- * предварительно снимается копия — входы никогда не изменяются.
+ * The [blas]/[lapack] pair defines the computational kernel: either the system library via JNI
+ * or the portable Java implementation; both share the same call interface, so a single
+ * class serves both variants. [DenseMatrix] matrices are stored in column-major order,
+ * and their arrays are passed to the kernel directly; where LAPACK overwrites its input with
+ * the result, a copy is taken first — inputs are never modified.
  */
 public class NetlibBackend internal constructor(
     private val blas: BLAS,
@@ -24,11 +24,11 @@ public class NetlibBackend internal constructor(
     override val isNative: Boolean = lapack is NativeLAPACK
 
     override val name: String =
-        if (isNative) "netlib ${lapack.javaClass.simpleName} (нативная BLAS/LAPACK системы)"
+        if (isNative) "netlib ${lapack.javaClass.simpleName} (native system BLAS/LAPACK)"
         else "netlib ${lapack.javaClass.simpleName} (Java)"
 
     override fun axpy(alpha: Double, x: DoubleArray, y: DoubleArray) {
-        require(x.size == y.size) { "axpy: длины векторов должны совпадать, получено ${x.size} и ${y.size}" }
+        require(x.size == y.size) { "axpy: vector lengths must match, got ${x.size} and ${y.size}" }
         if (x.isEmpty()) return
         blas.daxpy(x.size, alpha, x, 1, y, 1)
     }
@@ -71,7 +71,7 @@ public class NetlibBackend internal constructor(
         lapack.dgesv(n, nrhs, aCopy, maxOf(1, n), ipiv, bCopy, maxOf(1, n), info)
         checkArgs("dgesv", info)
         if (info.`val` > 0) {
-            throw IllegalStateException("матрица вырождена: нулевой ведущий элемент в позиции ${info.`val`}")
+            throw IllegalStateException("Matrix is singular: zero pivot at position ${info.`val`}")
         }
         return DenseMatrix.fromColumnMajor(n, nrhs, bCopy)
     }
@@ -86,7 +86,7 @@ public class NetlibBackend internal constructor(
     }
 
     override fun luSolve(lu: LuFactorization, b: DenseMatrix): DenseMatrix {
-        require(!lu.isSingular) { "разложение LU вырождено: нулевой ведущий элемент в позиции ${lu.singularAt}" }
+        require(!lu.isSingular) { "LU factorization is singular: zero pivot at position ${lu.singularAt}" }
         val n = lu.lu.rows
         val bCopy = b.data.copyOf()
         val info = intW(0)
@@ -124,7 +124,7 @@ public class NetlibBackend internal constructor(
         val lwork = maxOf(query[0].toInt(), 3 * n - 1, 1)
         lapack.dsyev("N", "U", n, work, n, w, DoubleArray(lwork), lwork, info)
         checkArgs("dsyev", info)
-        if (info.`val` > 0) throw IllegalStateException("собственные значения не сошлись")
+        if (info.`val` > 0) throw IllegalStateException("Eigenvalue iteration failed to converge")
         return w
     }
 
@@ -149,8 +149,8 @@ public class NetlibBackend internal constructor(
         return lapack.dlange(code, a.rows, a.cols, a.data, a.rows, DoubleArray(maxOf(1, a.rows)))
     }
 
-    /** Отрицательный код возврата означает недопустимый аргумент вызова — ошибка программиста. */
+    /** A negative return code means an invalid call argument — a programming error. */
     private fun checkArgs(routine: String, info: intW) {
-        require(info.`val` >= 0) { "$routine: недопустимый аргумент номер ${-info.`val`}" }
+        require(info.`val` >= 0) { "$routine: invalid argument number ${-info.`val`}" }
     }
 }

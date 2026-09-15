@@ -4,7 +4,7 @@ import numerics.DenseMatrix
 import kotlin.math.abs
 import kotlin.math.max
 
-/** Общие хелперы property-тестов: нормы и относительные расхождения без обращения к проверяемой библиотеке. */
+/** Shared helpers for property tests: norms and relative differences computed without calling the library under test. */
 internal object PropertySupport {
     fun maxAbs(x: DoubleArray): Double {
         var m = 0.0
@@ -14,7 +14,7 @@ internal object PropertySupport {
 
     /** max|a−b| / max(max|b|, 1). */
     fun relDiff(a: DoubleArray, b: DoubleArray): Double {
-        require(a.size == b.size) { "размеры ${a.size} и ${b.size} не совпадают" }
+        require(a.size == b.size) { "sizes ${a.size} and ${b.size} do not match" }
         var d = 0.0
         for (i in a.indices) d = max(d, abs(a[i] - b[i]))
         return d / max(maxAbs(b), 1.0)
@@ -22,7 +22,7 @@ internal object PropertySupport {
 
     fun relDiff(a: DenseMatrix, b: DenseMatrix): Double = relDiff(a.data, b.data)
 
-    /** ‖A‖∞ — максимальная сумма модулей по строкам. */
+    /** ‖A‖∞ — maximum absolute row sum. */
     fun normInf(a: DenseMatrix): Double {
         var m = 0.0
         for (i in 0 until a.rows) {
@@ -33,14 +33,14 @@ internal object PropertySupport {
         return m
     }
 
-    /** ‖A‖₁ — максимальная сумма модулей по столбцам. */
+    /** ‖A‖₁ — maximum absolute column sum. */
     fun norm1(a: DenseMatrix): Double = normInf(a.transpose())
 
-    /** Наивное A·x (тройной цикл, независимо от бэкендов). */
+    /** Naive A·x (plain loops, independent of any backend). */
     fun plainMatVec(a: DenseMatrix, x: DoubleArray): DoubleArray =
         DoubleArray(a.rows) { i -> var s = 0.0; for (j in 0 until a.cols) s += a[i, j] * x[j]; s }
 
-    /** |A|·|x| — масштаб округления для произведения. */
+    /** |A|·|x| — rounding scale for the product. */
     fun absMatVec(a: DenseMatrix, x: DoubleArray): DoubleArray =
         DoubleArray(a.rows) { i -> var s = 0.0; for (j in 0 until a.cols) s += abs(a[i, j] * x[j]); s }
 

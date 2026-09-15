@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.TestFactory
 import kotlin.test.assertEquals
 
-/** Эталон `conditioning.json`: `conditionInf` — `condInf`, `inversionResidual`, `isReliable`. */
+/** Golden reference `conditioning.json`: `conditionInf` — `condInf`, `inversionResidual`, `isReliable`. */
 @Tag("fast")
 class GoldenConditioningTest {
 

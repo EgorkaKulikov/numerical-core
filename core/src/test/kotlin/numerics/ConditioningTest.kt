@@ -9,28 +9,28 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Тесты обусловленности: оценка cond через явное обращение (с невязкой обращения
- * как признаком достоверности) и спектральные оценки методом вращений Якоби.
+ * Conditioning tests: the cond estimate via explicit inversion (with the inversion residual
+ * as the reliability indicator) and spectral estimates via Jacobi rotations.
  *
- * Ключевое требование, которое проверяют тесты: на почти вырожденной матрице API
- * не возвращает без предупреждения нечисловой результат, а помечает оценку как недостоверную.
+ * The key requirement checked here: on a nearly singular matrix the API does not silently
+ * return a meaningless number but flags the estimate as unreliable.
  */
 @Tag("fast")
 class ConditioningTest {
 
-    /** ‖A‖∞ = max по строкам суммы модулей. */
+    /** ‖A‖∞ = maximum absolute row sum. */
     @Test fun matrixNormInfIsMaxRowSum() {
         val a = arrayOf(doubleArrayOf(1.0, -2.0), doubleArrayOf(3.0, 4.0))
         assertEquals(7.0, Conditioning.matrixNormInf(a), 1e-15)
     }
 
-    /** Пустая матрица — ошибка контракта, а не 0.0. */
+    /** An empty matrix is a contract violation, not 0.0. */
     @Test fun matrixNormInfRejectsEmpty() {
         assertFailsWith<IllegalArgumentException> { Conditioning.matrixNormInf(arrayOf()) }
         assertFailsWith<IllegalArgumentException> { Conditioning.matrixNormInf(arrayOf(doubleArrayOf())) }
     }
 
-    /** Обращение 2x2: сверка с явной формулой обратной матрицы. */
+    /** 2x2 inversion: checked against the closed-form inverse. */
     @Test fun inverseMatchesClosedForm() {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0))
         val inv = Conditioning.inverse(a)!!
@@ -41,7 +41,7 @@ class ConditioningTest {
         assertEquals(-0.5, inv[1][1], 1e-12)
     }
 
-    /** Неквадратная и пустая матрицы отвергаются контрактом обращения. */
+    /** Non-square and empty matrices are rejected by the inversion contract. */
     @Test fun inverseRejectsMalformed() {
         assertFailsWith<IllegalArgumentException> { Conditioning.inverse(arrayOf()) }
         assertFailsWith<IllegalArgumentException> {
@@ -49,40 +49,40 @@ class ConditioningTest {
         }
     }
 
-    /** cond∞ для 2x2 совпадает с аналитическим значением ‖A‖∞·‖A^{-1}‖∞ = 7*3 = 21. */
+    /** cond∞ of a 2x2 matches the analytic value ‖A‖∞·‖A^{-1}‖∞ = 7*3 = 21. */
     @Test fun conditionInfMatchesAnalyticValue() {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 4.0))
         val est = Conditioning.conditionInf(a)
-        assertTrue(est.isReliable, "хорошо обусловленная матрица обязана давать достоверную оценку")
+        assertTrue(est.isReliable, "a well-conditioned matrix must yield a reliable estimate")
         assertEquals(21.0, est.condInf, 1e-10)
         assertEquals(21.0, est.valueOrNull()!!, 1e-10)
-        assertTrue(est.inversionResidual < 1e-14, "невязка обращения = ${est.inversionResidual}")
+        assertTrue(est.inversionResidual < 1e-14, "inversion residual = ${est.inversionResidual}")
     }
 
-    /** cond∞(I) = 1 — нижняя граница числа обусловленности достигается. */
+    /** cond∞(I) = 1 — the lower bound of the condition number is attained. */
     @Test fun conditionInfOfIdentityIsOne() {
         val est = Conditioning.conditionInf(LinearAlgebra.identity(5))
         assertTrue(est.isReliable)
         assertEquals(1.0, est.condInf, 1e-12)
     }
 
-    /** Вырожденная матрица: оценка бесконечна, помечена недостоверной, valueOrNull = null. */
+    /** Singular matrix: the estimate is infinite, flagged unreliable, valueOrNull = null. */
     @Test fun conditionInfReportsSingularAsUnreliable() {
         val a = arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(2.0, 4.0))
         val est = Conditioning.conditionInf(a)
-        assertTrue(!est.isReliable, "вырожденная матрица не может дать достоверную оценку")
+        assertTrue(!est.isReliable, "a singular matrix cannot yield a reliable estimate")
         assertNull(est.valueOrNull())
         assertNull(Conditioning.inverse(a))
     }
 
-    /** Неположительный порог достоверности — ошибка контракта: он означал бы отсутствие проверки. */
+    /** A non-positive reliability tolerance is a contract violation: it would mean no check at all. */
     @Test fun conditionInfRejectsNonPositiveTolerance() {
         assertFailsWith<IllegalArgumentException> {
             Conditioning.conditionInf(LinearAlgebra.identity(2), tolerance = 0.0)
         }
     }
 
-    /** Собственные значения симметричной 2x2 [[2,1],[1,2]] — это 1 и 3, по возрастанию. */
+    /** Eigenvalues of the symmetric 2x2 [[2,1],[1,2]] are 1 and 3, in ascending order. */
     @Test fun symmetricEigenvaluesOfTwoByTwo() {
         val a = arrayOf(doubleArrayOf(2.0, 1.0), doubleArrayOf(1.0, 2.0))
         val eig = Conditioning.symmetricEigenvalues(a)
@@ -92,7 +92,7 @@ class ConditioningTest {
         assertEquals(3.0, Conditioning.conditionSymmetric(a), 1e-12)
     }
 
-    /** Диагональная матрица уже диагональна: метод обязан выйти сразу и не испортить спектр. */
+    /** A diagonal matrix is already diagonal: the method must exit immediately without disturbing the spectrum. */
     @Test fun symmetricEigenvaluesOfDiagonalAreDiagonalEntries() {
         val a = arrayOf(
             doubleArrayOf(3.0, 0.0, 0.0),
@@ -107,7 +107,7 @@ class ConditioningTest {
         assertEquals(3.0, Conditioning.conditionSymmetric(a), 1e-12)
     }
 
-    /** Нулевые внедиагональные элементы пропускаются без вращения: 3x3 со связью только (0,2). */
+    /** Zero off-diagonal entries are skipped without a rotation: 3x3 coupled only through (0,2). */
     @Test fun symmetricEigenvaluesSkipsZeroOffDiagonal() {
         val a = arrayOf(
             doubleArrayOf(2.0, 0.0, 1.0),
@@ -120,7 +120,7 @@ class ConditioningTest {
         assertEquals(5.0, eig[2], 1e-12)
     }
 
-    /** Сумма собственных значений равна следу — независимая проверка на несимметричном спектре. */
+    /** The eigenvalues sum to the trace — an independent check on a non-trivial spectrum. */
     @Test fun symmetricEigenvaluesPreserveTrace() {
         val n = 6
         val a = Array(n) { i -> DoubleArray(n) { j -> 1.0 / (1.0 + i + j) } }
@@ -130,7 +130,7 @@ class ConditioningTest {
         assertEquals(trace, eig.sum(), 1e-10)
     }
 
-    /** Несимметричная матрица, пустая и неквадратная отвергаются контрактом. */
+    /** Non-symmetric, empty and non-square matrices are rejected by the contract. */
     @Test fun symmetricEigenvaluesRejectMalformed() {
         assertFailsWith<IllegalArgumentException> {
             Conditioning.symmetricEigenvalues(arrayOf(doubleArrayOf(1.0, 2.0), doubleArrayOf(3.0, 1.0)))
@@ -141,7 +141,7 @@ class ConditioningTest {
         }
     }
 
-    /** Симметричная вырожденная матрица: cond2 = +Inf, а не большое случайное число. */
+    /** Symmetric singular matrix: cond2 = +Inf, not some large random number. */
     @Test fun conditionSymmetricOfSingularIsInfinite() {
         val a = arrayOf(doubleArrayOf(1.0, 1.0), doubleArrayOf(1.0, 1.0))
         assertEquals(0.0, Conditioning.smallestMagnitudeEigenvalue(a), 1e-14)
@@ -149,32 +149,32 @@ class ConditioningTest {
     }
 
     /**
-     * Граница применимости, часть 1 (достоверный режим): на хорошо обусловленной
-     * симметричной матрице оценка через обращение и метод Якоби согласованы.
+     * Applicability boundary, part 1 (reliable regime): on a well-conditioned symmetric
+     * matrix the inversion-based estimate and the Jacobi method agree.
      *
-     * Для симметричной A нормы ‖·‖∞ и ‖·‖2 различаются не более чем в n раз,
-     * поэтому сверяем не сами числа, а то, что обе оценки лежат в одном коридоре
-     * (и обе конечны, и обе >= 1).
+     * For symmetric A the norms ‖·‖∞ and ‖·‖2 differ by at most a factor of n,
+     * so we compare not the numbers themselves but that both estimates lie in the same
+     * corridor (and both are finite, and both >= 1).
      */
     @Test fun wellConditionedMatrixAgreesBetweenMethods() {
         val n = 16
-        // A = I + 0.1 * симметричное гладкое ядро -> диагонально доминирующая, cond ~ 1.
+        // A = I + 0.1 * symmetric smooth kernel -> diagonally dominant, cond ~ 1.
         val a = Array(n) { i -> DoubleArray(n) { j -> (if (i == j) 1.0 else 0.0) + 0.1 / (1.0 + abs(i - j)) } }
         val est = Conditioning.conditionInf(a)
         val cond2 = Conditioning.conditionSymmetric(a)
-        assertTrue(est.isReliable, "невязка обращения = ${est.inversionResidual}")
+        assertTrue(est.isReliable, "inversion residual = ${est.inversionResidual}")
         assertTrue(cond2.isFinite() && cond2 >= 1.0)
         assertTrue(est.condInf >= 1.0)
         assertTrue(est.condInf <= n * cond2 && cond2 <= n * est.condInf, "cond_inf=${est.condInf}, cond_2=$cond2")
     }
 
     /**
-     * Граница применимости, часть 2 (недостоверный режим): матрица с элементами
-     * 1/(1 + (i + j)/n) (типа Коши) численно вырождена (cond ≫ 1/ε).
+     * Applicability boundary, part 2 (unreliable regime): the matrix with entries
+     * 1/(1 + (i + j)/n) (Cauchy-like) is numerically singular (cond ≫ 1/ε).
      *
-     * Метод Якоби даёт sigma_min = 0, тогда как оценка через обращение при этом либо
-     * признаётся недостоверной по невязке, либо бесконечна. Этот контракт закрывает класс
-     * ошибок «шум порядка 1e16...1e19 напечатан как число обусловленности».
+     * The Jacobi method gives sigma_min = 0, while the inversion-based estimate is either
+     * declared unreliable by its residual or infinite. This contract closes the class of
+     * bugs "noise of order 1e16...1e19 printed as a condition number".
      */
     @Test fun nearlySingularCauchyMatrixIsReportedUnreliable() {
         val n = 32
@@ -187,14 +187,14 @@ class ConditioningTest {
         val est = Conditioning.conditionInf(a)
         assertTrue(
             !est.isReliable,
-            "оценка через обращение обязана быть помечена недостоверной: cond=${est.condInf}, невязка=${est.inversionResidual}",
+            "the inversion-based estimate must be flagged unreliable: cond=${est.condInf}, residual=${est.inversionResidual}",
         )
         assertNull(est.valueOrNull())
     }
 
     /**
-     * Сдвиг диагонали выводит ту же матрицу в достоверный режим: после добавления
-     * alpha·I с alpha = 1e-2 невязка обращения падает ниже порога и оценка становится пригодной.
+     * A diagonal shift brings the same matrix back into the reliable regime: after adding
+     * alpha·I with alpha = 1e-2 the inversion residual drops below the tolerance and the estimate becomes usable.
      */
     @Test fun diagonalShiftRestoresReliability() {
         val n = 32
@@ -204,7 +204,7 @@ class ConditioningTest {
             }
         }
         val est = Conditioning.conditionInf(a)
-        assertTrue(est.isReliable, "невязка обращения = ${est.inversionResidual}")
+        assertTrue(est.isReliable, "inversion residual = ${est.inversionResidual}")
         assertTrue(est.condInf > 1.0 && est.condInf.isFinite())
     }
 }

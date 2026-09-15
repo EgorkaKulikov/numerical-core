@@ -7,48 +7,48 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Тесты порядков сходимости по таблице погрешностей: orders (порядок log2),
- * constCh (константа E_h/h^p).
+ * Tests of convergence orders computed from an error table: orders (log2 order),
+ * constCh (the constant E_h/h^p).
  */
 @Tag("fast")
 class ConvergenceRatesTest {
-    /** orders: для геометрически убывающих ошибок (деление на 2) порядок = 1, последний = NaN. */
+    /** orders: for geometrically decreasing errors (halving) the order is 1, the last entry is NaN. */
     @Test fun ordersGeometricHalving() {
         val errs = listOf(1.0, 0.5, 0.25)
         val p = orders(errs)
         assertEquals(3, p.size)
         assertEquals(1.0, p[0], 1e-12)
         assertEquals(1.0, p[1], 1e-12)
-        assertTrue(p[2].isNaN()) // последний элемент без следующего -> NaN
+        assertTrue(p[2].isNaN()) // last element has no successor -> NaN
     }
 
-    /** orders: убывание в 4 раза даёт порядок 2. */
+    /** orders: a fourfold decrease gives order 2. */
     @Test fun ordersQuarteringIsOrderTwo() {
         val p = orders(listOf(1.0, 0.25))
         assertEquals(2.0, p[0], 1e-12)
     }
 
     /**
-     * orders: нулевая погрешность (совпадение с точным решением) — порядок не определён,
-     * а не «бесконечен»: раньше log2(E/0) давал +Inf, log2(0/E) — -Inf.
+     * orders: a zero error (exact agreement with the true solution) leaves the order undefined,
+     * not "infinite": previously log2(E/0) gave +Inf and log2(0/E) gave -Inf.
      */
     @Test fun ordersUndefinedOnZeroError() {
-        assertTrue(orders(listOf(1.0, 0.0))[0].isNaN(), "E_{h/2}=0 -> порядок не определён")
-        assertTrue(orders(listOf(0.0, 1.0))[0].isNaN(), "E_h=0 -> порядок не определён")
-        assertTrue(orders(listOf(0.0, 0.0))[0].isNaN(), "обе нулевые -> порядок не определён")
-        // отрицательная «погрешность» бессмысленна и тоже даёт NaN, а не log от отрицательного
-        assertTrue(orders(listOf(-1.0, 1.0))[0].isNaN(), "отрицательная погрешность -> NaN")
-        // положительные значения рядом с нулём считаются по-прежнему
+        assertTrue(orders(listOf(1.0, 0.0))[0].isNaN(), "E_{h/2}=0 -> order undefined")
+        assertTrue(orders(listOf(0.0, 1.0))[0].isNaN(), "E_h=0 -> order undefined")
+        assertTrue(orders(listOf(0.0, 0.0))[0].isNaN(), "both zero -> order undefined")
+        // a negative "error" is meaningless and also yields NaN rather than a log of a negative number
+        assertTrue(orders(listOf(-1.0, 1.0))[0].isNaN(), "negative error -> NaN")
+        // positive values next to the zero are still computed
         assertEquals(1.0, orders(listOf(1.0, 0.5, 0.0))[0], 1e-12)
         assertTrue(orders(listOf(1.0, 0.5, 0.0))[1].isNaN())
     }
 
-    /** constCh: C = E_h / h^p — обратный к определению. */
+    /** constCh: C = E_h / h^p — the inverse of the definition. */
     @Test fun constChDefinition() {
         val eh = 0.08; val h = 0.25; val pp = 2.0
         val c = constCh(eh, h, pp)
         assertEquals(eh / (h * h), c, 1e-12)
-        // обратная сверка: c*h^p = eh
+        // reverse check: c*h^p = eh
         assertTrue(abs(c * h * h - eh) < 1e-12)
     }
 }

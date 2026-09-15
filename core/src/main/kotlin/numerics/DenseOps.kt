@@ -4,28 +4,28 @@ import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
- * Скалярные и служебные операции плотной линейной алгебры над строковыми массивами:
- * конструкторы матриц, нормы векторов и мера несимметричности. Не обращаются к
- * реализации линейной алгебры.
+ * Scalar and utility operations of dense linear algebra over row arrays:
+ * matrix constructors, vector norms and the asymmetry measure. They never call
+ * into the linear-algebra backend.
  *
- * Внутренние операции без проверок аргументов; проверки выполняет вызывающий код —
- * [LinearAlgebra], через который операции доступны снаружи.
+ * Internal operations without argument validation; the caller is responsible for
+ * checks — [LinearAlgebra], through which these operations are exposed publicly.
  */
 internal object DenseOps {
 
-    /** Создаёт нулевую матрицу размера rows x cols. */
+    /** Creates a zero matrix of size rows x cols. */
     fun zeros(rows: Int, cols: Int): Array<DoubleArray> = Array(rows) { DoubleArray(cols) }
 
-    /** Единичная матрица размера n x n. */
+    /** Identity matrix of size n x n. */
     fun identity(n: Int): Array<DoubleArray> = Array(n) { i -> DoubleArray(n) { j -> if (i == j) 1.0 else 0.0 } }
 
-    /** Евклидова норма вектора. */
+    /** Euclidean norm of a vector. */
     fun norm2(x: DoubleArray): Double = sqrt(x.fold(0.0) { acc, v -> acc + v * v })
 
-    /** Бесконечная (равномерная) норма вектора. */
+    /** Infinity (uniform) norm of a vector. */
     fun normInf(x: DoubleArray): Double = x.fold(0.0) { acc, v -> maxOf(acc, abs(v)) }
 
-    /** Мера несимметричности max|A - A^T| без проверок входа (их выполняет [LinearAlgebra.maxAsymmetry]). */
+    /** Asymmetry measure max|A - A^T| without input validation (performed by [LinearAlgebra.maxAsymmetry]). */
     fun maxAsymmetry(a: Array<DoubleArray>): Double {
         var m = 0.0
         for (i in a.indices) for (j in a.indices) m = maxOf(m, abs(a[i][j] - a[j][i]))

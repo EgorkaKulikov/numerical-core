@@ -1,59 +1,61 @@
-# Правила изменения numerical-core
+# Contributing to numerical-core
 
-numerical-core является библиотекой численных примитивов для плотных вычислений на
-Kotlin/JVM с контролем достоверности результатов. Ниже изложены правила, которым подчиняются
-все изменения кода и документации.
+numerical-core is a library of numerical primitives for dense computations on
+Kotlin/JVM with reliability control of the results. The rules below govern
+all changes to the code and documentation.
 
-## Язык
+## Language
 
-Документация, KDoc, комментарии и сообщения коммитов ведутся на русском языке;
-идентификаторы в коде — на английском. Стиль текста описательный: без выделения заглавными
-буквами, без жаргона, без ссылок на внешние проекты и историю версий.
+KDoc, comments, commit messages and all documentation are written in English; the only
+exception is `docs/ABSTRACT.md`, the software-registration abstract, which is kept in
+Russian. Identifiers in code are in English. The style
+is descriptive: no capitalized emphasis, no jargon, no references to external projects or
+version history.
 
-## Публичный API
+## Public API
 
-- Включён режим `explicitApi()`: каждый новый элемент объявляется `internal`. Публичным
-  элемент становится только при наличии KDoc и теста, покрывающего его контракт.
-- Недостоверное значение не возвращается как число: для этого используются `ForwardError`,
-  `Measured`, `ConditionEstimate.isReliable` или `null`.
-- Для нечислового входа (`NaN`, `±Inf`) методы `solve` и `cholesky` возбуждают исключение;
-  остальные операции распространяют его по правилам арифметики с плавающей точкой, как
-  BLAS.
-- Поведение метода (проверки, исключения, форма результата) не зависит от реализации
-  BLAS/LAPACK.
+- `explicitApi()` mode is enabled: every new element is declared `internal`. An element
+  becomes public only once it has KDoc and a test covering its contract.
+- An unreliable value is never returned as a plain number: `ForwardError`,
+  `Measured`, `ConditionEstimate.isReliable` or `null` are used instead.
+- For non-finite input (`NaN`, `±Inf`) the `solve` and `cholesky` methods throw an exception;
+  the remaining operations propagate it according to the rules of floating-point arithmetic,
+  like BLAS.
+- The behavior of a method (checks, exceptions, result shape) does not depend on the
+  BLAS/LAPACK implementation.
 
-## Численные методы
+## Numerical methods
 
-- Каждый метод сопровождается тестом на точность (сравнение с независимым оракулом или с
-  аналитическим ответом) и записью в `docs/ИСТОЧНИКИ.md` с указанием источника формул.
-- Пороги (`SINGULARITY_RELATIVE_TOLERANCE`, `INVERSION_RESIDUAL_TOLERANCE`,
-  `MACHINE_NOISE_THRESHOLD`) изменяются только с обоснованием в `docs/ТОЧНОСТЬ.md`.
-- Изменение формулы проверяется тестами на эталонах поведения и свойствами jqwik на обеих
-  реализациях (`-Dnumerics.backend=java` и `native`). Эталоны обновляются командой
-  `./gradlew :numerical-core:regenerateGolden` только при намеренном изменении поведения, с
-  записью причины в `core/src/test/resources/golden/README.md`.
+- Every method is accompanied by an accuracy test (comparison with an independent oracle or
+  with an analytic answer) and an entry in `docs/SOURCES.md` citing the source of the formulas.
+- Thresholds (`SINGULARITY_RELATIVE_TOLERANCE`, `INVERSION_RESIDUAL_TOLERANCE`,
+  `MACHINE_NOISE_THRESHOLD`) are changed only with a justification in `docs/ACCURACY.md`.
+- A change to a formula is verified by the golden reference tests and by jqwik properties on
+  both implementations (`-Dnumerics.backend=java` and `native`). Golden references are
+  regenerated with `./gradlew :numerical-core:regenerateGolden` only on a deliberate behavior
+  change, with the reason recorded in `core/src/test/resources/golden/README.md`.
 
-## Команды
+## Commands
 
-    ./gradlew build                                              # тесты, покрытие Kover, оба модуля
-    ./gradlew :numerical-core:test -Dnumerics.backend=java       # переносимая реализация на Java
-    ./gradlew :numerical-core:test -Dnumerics.backend=native     # системная реализация
-    ./gradlew :numerical-core:benchmark -Pbench.args="256 1024"  # измерения производительности
-    ./gradlew :numerical-core:dokkaHtml                          # документация API
+    ./gradlew build                                              # tests, Kover coverage, both modules
+    ./gradlew :numerical-core:test -Dnumerics.backend=java       # portable Java implementation
+    ./gradlew :numerical-core:test -Dnumerics.backend=native     # system implementation
+    ./gradlew :numerical-core:benchmark -Pbench.args="256 1024"  # performance measurements
+    ./gradlew :numerical-core:dokkaHtml                          # API documentation
 
-Задача `check` включает проверку порога покрытия Kover; изменение, снижающее покрытие ниже
-порога, не проходит сборку. Все команды выполняются с флагом `--offline`.
+The `check` task includes the Kover coverage threshold; a change that drops coverage below
+the threshold fails the build. All commands are run with the `--offline` flag.
 
-Публикация версии: тег `vX.Y.Z` на `main` запускает публикацию в GitHub Packages из CI.
+Releasing a version: a `vX.Y.Z` tag on `main` triggers publication to GitHub Packages from CI.
 
-## Документация
+## Documentation
 
-После изменения API обновляются `README.md` (таблица состава, пример) и соответствующий
-документ в `docs/`. Числа в `docs/ПРОИЗВОДИТЕЛЬНОСТЬ.md` получаются командой `benchmark` с
-указанием машины и реализации BLAS/LAPACK.
+After an API change, update `README.md` (the contents table, the example) and the
+corresponding document in `docs/`. The numbers in `docs/PERFORMANCE.md` are obtained with
+the `benchmark` command, stating the machine and the BLAS/LAPACK implementation.
 
-## Коммиты
+## Commits
 
-Сообщения коммитов составляются на русском языке с префиксом области: `api:`, `algo:`,
-`test:`, `docs:`, `build:`. Одному изменению соответствует один коммит; сообщение описывает,
-что изменилось и по какой причине.
+Commit messages are written in English with an area prefix: `api:`, `algo:`,
+`test:`, `docs:`, `build:`. One change corresponds to one commit; the message describes
+what changed and why.

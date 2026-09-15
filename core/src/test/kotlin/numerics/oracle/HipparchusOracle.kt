@@ -11,8 +11,8 @@ import org.hipparchus.linear.MatrixUtils
 import org.hipparchus.linear.RealMatrix
 
 /**
- * Независимый оракул на Hipparchus (чистая Java, без BLAS/LAPACK) для property-based тестов.
- * Работает над [DenseMatrix]/[DoubleArray]; конвертация — через строки.
+ * Independent oracle backed by Hipparchus (pure Java, no BLAS/LAPACK) for property-based tests.
+ * Operates on [DenseMatrix]/[DoubleArray]; conversion goes through row arrays.
  */
 object HipparchusOracle {
 
@@ -20,41 +20,41 @@ object HipparchusOracle {
 
     fun fromReal(m: RealMatrix): DenseMatrix = DenseMatrix.fromRows(m.data)
 
-    /** Решение A·x = b через LU-разложение Hipparchus (частичный выбор ведущего элемента). */
+    /** Solves A·x = b via the Hipparchus LU factorization (partial pivoting). */
     fun solve(a: DenseMatrix, b: DoubleArray): DoubleArray =
         LUDecomposition(toReal(a)).solver.solve(ArrayRealVector(b)).toArray()
 
-    /** Обратная матрица через LU-разложение Hipparchus. */
+    /** Inverse matrix via the Hipparchus LU factorization. */
     fun inverse(a: DenseMatrix): DenseMatrix = fromReal(LUDecomposition(toReal(a)).solver.inverse)
 
-    /** Произведение A·x. */
+    /** Product A·x. */
     fun matVec(a: DenseMatrix, x: DoubleArray): DoubleArray = toReal(a).operate(x)
 
-    /** Произведение A·B. */
+    /** Product A·B. */
     fun matMat(a: DenseMatrix, b: DenseMatrix): DenseMatrix = fromReal(toReal(a).multiply(toReal(b)))
 
-    /** Нижний треугольный множитель L разложения Холецкого A = L·Lᵀ. */
+    /** Lower triangular factor L of the Cholesky factorization A = L·Lᵀ. */
     fun cholesky(a: DenseMatrix): DenseMatrix = fromReal(CholeskyDecomposition(toReal(a), 1e-12, 1e-14).l)
 
-    /** Собственные значения симметричной матрицы по возрастанию. */
+    /** Eigenvalues of a symmetric matrix in ascending order. */
     fun symmetricEigenvalues(a: DenseMatrix): DoubleArray =
         EigenDecompositionSymmetric(toReal(a)).eigenvalues.sortedArray()
 
-    /** Число обусловленности в норме-1: ‖A‖₁·‖A⁻¹‖₁ (точное, через явное обращение). */
+    /** Condition number in the 1-norm: ‖A‖₁·‖A⁻¹‖₁ (exact, via explicit inversion). */
     fun condition1(a: DenseMatrix): Double {
         val m = toReal(a)
         val inv = LUDecomposition(m).solver.inverse
         return m.norm1 * inv.norm1
     }
 
-    /** Узлы и веса квадратуры Гаусса–Лежандра на [-1, 1], узлы по возрастанию. */
+    /** Gauss–Legendre nodes and weights on [-1, 1], nodes in ascending order. */
     fun gaussLegendre(m: Int): Pair<DoubleArray, DoubleArray> {
         val g = GaussIntegratorFactory().legendre(m)
         val pairs = (0 until g.numberOfPoints).map { g.getPoint(it) to g.getWeight(it) }.sortedBy { it.first }
         return DoubleArray(m) { pairs[it].first } to DoubleArray(m) { pairs[it].second }
     }
 
-    /** Интеграл f по [lo, hi] квадратурой Гаусса–Лежандра с m узлами. */
+    /** Integral of f over [lo, hi] by Gauss–Legendre quadrature with m nodes. */
     fun integrate(lo: Double, hi: Double, m: Int, f: (Double) -> Double): Double =
         GaussIntegratorFactory().legendre(m, lo, hi).integrate(UnivariateFunction { f(it) })
 }

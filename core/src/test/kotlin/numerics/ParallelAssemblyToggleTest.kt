@@ -5,23 +5,23 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * Документирует, что параметр `parallel` методов [ParallelAssembly] не меняет
- * результат сборки: последовательный и параллельный пути дают побитово
- * идентичные матрицы. Это обоснование того, что измерения производительности сравнивают seq/par
- * ускорение на одном коде.
+ * Documents that the `parallel` parameter of [ParallelAssembly] methods does not change
+ * the assembly result: the sequential and parallel paths produce bit-for-bit
+ * identical matrices. This justifies that performance measurements compare the seq/par
+ * speedup on the same code.
  *
- * Раньше режим переключался глобальным `ParallelAssembly.parallelEnabled`, и тест
- * обязан был восстанавливать его в `finally`; теперь режим — обычный аргумент,
- * поэтому восстанавливать нечего и порядок тестов ни на что не влияет.
+ * Previously the mode was toggled by the global `ParallelAssembly.parallelEnabled`, and the test
+ * had to restore it in `finally`; now the mode is an ordinary argument,
+ * so there is nothing to restore and test order does not matter.
  */
 @Tag("fast")
 class ParallelAssemblyToggleTest {
 
-    /** Нетривиальная, не-симметричная ячейка с разным вкладом строки/столбца. */
+    /** A non-trivial, non-symmetric cell with different row/column contributions. */
     private fun cellFn(i: Int, j: Int): Double =
         Math.sin(0.3 * i + 1.0) * Math.cos(0.17 * j + 0.5) + (i * 31 + j) % 7
 
-    /** assembleMatrix: parallel=false и =true дают побитно одинаковый результат. */
+    /** assembleMatrix: parallel=false and =true give bit-for-bit identical results. */
     @Test
     fun assembleMatrix_identical_for_both_modes() {
         val rows = 37
@@ -34,7 +34,7 @@ class ParallelAssemblyToggleTest {
         }
     }
 
-    /** assembleRows: parallel=false и =true дают побитно одинаковый результат. */
+    /** assembleRows: parallel=false and =true give bit-for-bit identical results. */
     @Test
     fun assembleRows_identical_for_both_modes() {
         val rows = 37

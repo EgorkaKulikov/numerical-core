@@ -1,40 +1,40 @@
 # numerical-core
 
-Библиотека плотной линейной алгебры для платформы JVM. Вычисления выполняются системной реализацией BLAS/LAPACK
-той машины, на которой запущена программа, а результат сопровождается оценкой числа достоверных значащих цифр.
+A dense linear algebra library for the JVM. Computations are carried out by the system BLAS/LAPACK
+implementation of the machine the program runs on, and every result comes with an estimate of the number of reliable significant digits.
 
-## Обоснование
+## Rationale
 
-Существующие средства для платформы JVM решают задачу частично. Интерфейсы вызова LAPACK (netlib, JavaCPP Presets
-для OpenBLAS и MKL) предоставляют процедуру `dgesv` в её исходной форме: код возврата `info = 0` свидетельствует
-лишь о завершении разложения, но не о точности решения. Библиотеки на языке Java (EJML, ojAlgo, Hipparchus)
-не используют системные реализации BLAS/LAPACK (MKL, Accelerate) и потому
-на матрицах порядка 10³ и выше уступают им в производительности в 10–20 раз. Ни одно из этих средств не сообщает
-вызывающей программе, сколько значащих цифр результата достоверны. Библиотека numerical-core предназначена для
-устранения этих недостатков.
+Existing tools for the JVM solve the problem only in part. LAPACK bindings (netlib, JavaCPP Presets
+for OpenBLAS and MKL) expose the `dgesv` routine in its raw form: the return code `info = 0` only indicates
+that the factorization completed, not that the solution is accurate. Java libraries (EJML, ojAlgo, Hipparchus)
+do not use the system BLAS/LAPACK implementations (MKL, Accelerate) and are therefore
+10–20 times slower on matrices of order 10³ and above. None of these tools tells the calling program
+how many significant digits of the result are reliable. numerical-core is designed to
+remove these shortcomings.
 
-Достоверность результата закреплена в системе типов. Метод `solve` возвращает решение только после проверки
-обратной ошибки; для вырожденной системы возбуждается исключение. Метод `solveDiagnosed` возвращает `ForwardError`
-с тремя исходами (граница получена, границы нет, оценка недостоверна), полнота разбора которых проверяется компилятором.
+Reliability of the result is encoded in the type system. The `solve` method returns a solution only after checking
+the backward error; for a singular system it throws an exception. The `solveDiagnosed` method returns a `ForwardError`
+with three outcomes (bound obtained, no bound, estimate unreliable), and the compiler checks that all of them are handled.
 
-Производительность определяется системной реализацией BLAS/LAPACK. Матрица хранится в столбцовом порядке LAPACK
-и передаётся в процедуры `dgesv` и `dgemm` без переупорядочения. На узле с Intel MKL используется MKL, на
-компьютерах Apple — Accelerate, на Linux — системная OpenBLAS; числом потоков управляет планировщик кластера.
-Решение системы линейных алгебраических уравнений (СЛАУ) размера 1024×1024 занимает 10 мс против 140 мс
-у реализации на Java; число обусловленности вычисляется за 27 мс против 24 с при обращении матрицы через n решений СЛАУ.
+Performance is determined by the system BLAS/LAPACK implementation. A matrix is stored in LAPACK column-major order
+and passed to the `dgesv` and `dgemm` routines without reordering. On a node with Intel MKL, MKL is used; on
+Apple computers, Accelerate; on Linux, the system OpenBLAS; the number of threads is controlled by the cluster scheduler.
+Solving a 1024×1024 system of linear algebraic equations takes 10 ms versus 140 ms
+for a Java implementation; the condition number is computed in 27 ms versus 24 s for inverting the matrix through n linear solves.
 
-Поведение библиотеки одинаково для всех реализаций BLAS/LAPACK. Проверка невязки, исключения и форматы результата
-совпадают для MKL, OpenBLAS, Accelerate и переносимой реализации на Java, применяемой при отсутствии машинно-зависимой.
-О переходе на переносимую реализацию сообщается явно; неявный переход на медленный путь исключён.
+The library behaves identically on every BLAS/LAPACK implementation. Residual checks, exceptions and result formats
+are the same for MKL, OpenBLAS, Accelerate and the portable Java implementation used when no native one is available.
+Falling back to the portable implementation is reported explicitly; a silent switch to the slow path cannot happen.
 
-Примитивы, отсутствующие в LAPACK, выполнены в том же стиле и с теми же гарантиями. К ним относятся составная
-квадратура Гаусса–Лежандра, параллельная сборка матриц с побитово воспроизводимым результатом и вычисление
-наблюдаемого порядка сходимости только по тем измерениям, которые превышают шум округления.
+Primitives absent from LAPACK are implemented in the same style and with the same guarantees. These include composite
+Gauss–Legendre quadrature, parallel matrix assembly with a bit-for-bit reproducible result, and computation of the
+observed convergence order using only the measurements that exceed rounding noise.
 
-## Подключение
+## Setup
 
-Требуется JDK 21 или новее. Зависимость `io.github.egorkakulikov:numerical-core:1.0.0` публикуется в GitHub Packages;
-для чтения требуется токен с правом `read:packages` (`gpr.user` и `gpr.token` в `~/.gradle/gradle.properties` либо переменные окружения):
+JDK 21 or newer is required. The dependency `io.github.egorkakulikov:numerical-core:1.1.0` is published to GitHub Packages;
+reading it requires a token with the `read:packages` scope (`gpr.user` and `gpr.token` in `~/.gradle/gradle.properties` or environment variables):
 
 ```kotlin
 maven {
@@ -46,16 +46,16 @@ maven {
 }
 ```
 
-При отсутствии на машине системной реализации BLAS/LAPACK подключается зависимость
-`io.github.egorkakulikov:numerical-core-openblas:1.0.0`, а метод `OpenBlas.install()` вызывается до первого
-обращения к библиотеке: он распаковывает OpenBLAS для текущей платформы (см. `openblas/README.md`).
+If the machine has no system BLAS/LAPACK implementation, add the dependency
+`io.github.egorkakulikov:numerical-core-openblas:1.1.0` and call `OpenBlas.install()` before the first
+use of the library: it unpacks OpenBLAS for the current platform (see `openblas/README.md`).
 
-## Документация
+## Documentation
 
-Пороги достоверности и их обоснование описаны в `docs/ТОЧНОСТЬ.md`; путь данных, многопоточность и измерения — в
-`docs/ПРОИЗВОДИТЕЛЬНОСТЬ.md`; источники алгоритмов — в `docs/ИСТОЧНИКИ.md`; документация API собирается командой `./gradlew :numerical-core:dokkaHtml`.
+Reliability thresholds and their justification are described in `docs/ACCURACY.md`; the data path, multithreading and measurements in
+`docs/PERFORMANCE.md`; the sources of the algorithms in `docs/SOURCES.md`; the API documentation is built with `./gradlew :numerical-core:dokkaHtml`.
 
-## Лицензия
+## License
 
-Библиотека распространяется по лицензии Apache License 2.0; правообладатель — Куликов Егор Константинович.
-Текст лицензии приведён в файле `LICENSE`, уведомления о сторонних компонентах — в файле `NOTICE`.
+The library is distributed under the Apache License 2.0; the copyright holder is Egor Kulikov.
+The license text is in the `LICENSE` file; third-party notices are in the `NOTICE` file.

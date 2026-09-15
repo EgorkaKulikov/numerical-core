@@ -4,19 +4,19 @@ import java.util.concurrent.ForkJoinPool
 import java.util.stream.IntStream
 
 /**
- * Параллельная сборка матриц по независимым строкам или столбцам. Каждая задача пишет только
- * в свой участок результата, поэтому результат побитово совпадает с последовательным
- * независимо от числа потоков и порядка выполнения.
+ * Parallel matrix assembly over independent rows or columns. Each task writes only to
+ * its own slice of the result, so the result is bit-for-bit identical to the sequential one
+ * regardless of the number of threads and execution order.
  *
- * Перегрузки с `parallel: Boolean` используют общий пул (`ForkJoinPool.commonPool`); перегрузки
- * с [NumericsContext] берут разрешение параллелизма и число потоков из контекста и создают
- * отдельный пул на время сборки.
+ * The `parallel: Boolean` overloads use the common pool (`ForkJoinPool.commonPool`); the
+ * [NumericsContext] overloads take the parallelism flag and thread count from the context and
+ * create a dedicated pool for the duration of the assembly.
  */
 public object ParallelAssembly {
 
     /**
-     * Матрица `rows × cols` как массив строк: строка `i` целиком вычисляется функцией [rowFn]
-     * (длина каждой строки должна равняться `cols`).
+     * Matrix `rows × cols` as an array of rows: row `i` is computed as a whole by [rowFn]
+     * (each row must have length `cols`).
      */
     public fun assembleRows(
         rows: Int,
@@ -25,7 +25,7 @@ public object ParallelAssembly {
         rowFn: (Int) -> DoubleArray,
     ): Array<DoubleArray> = assembleRowsImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), rowFn)
 
-    /** То же, что [assembleRows], с параметрами параллелизма из [context]. */
+    /** Same as [assembleRows], with parallelism settings taken from [context]. */
     public fun assembleRows(
         rows: Int,
         cols: Int,
@@ -33,7 +33,7 @@ public object ParallelAssembly {
         rowFn: (Int) -> DoubleArray,
     ): Array<DoubleArray> = assembleRowsImpl(rows, cols, context.parallel, context.parallelism, rowFn)
 
-    /** Матрица `rows × cols` как массив строк: элемент `(i, j)` вычисляется функцией [cellFn]. */
+    /** Matrix `rows × cols` as an array of rows: entry `(i, j)` is computed by [cellFn]. */
     public fun assembleMatrix(
         rows: Int,
         cols: Int,
@@ -41,7 +41,7 @@ public object ParallelAssembly {
         cellFn: (Int, Int) -> Double,
     ): Array<DoubleArray> = assembleMatrixImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), cellFn)
 
-    /** То же, что [assembleMatrix], с параметрами параллелизма из [context]. */
+    /** Same as [assembleMatrix], with parallelism settings taken from [context]. */
     public fun assembleMatrix(
         rows: Int,
         cols: Int,
@@ -50,8 +50,8 @@ public object ParallelAssembly {
     ): Array<DoubleArray> = assembleMatrixImpl(rows, cols, context.parallel, context.parallelism, cellFn)
 
     /**
-     * Плотная матрица `rows × cols` в столбцовом порядке: элемент `(i, j)` вычисляется функцией
-     * [cellFn]; параллелизм — по столбцам.
+     * Dense matrix `rows × cols` in column-major order: entry `(i, j)` is computed by
+     * [cellFn]; parallelized over columns.
      */
     public fun assembleDense(
         rows: Int,
@@ -60,7 +60,7 @@ public object ParallelAssembly {
         cellFn: (Int, Int) -> Double,
     ): DenseMatrix = assembleDenseImpl(rows, cols, parallel, Runtime.getRuntime().availableProcessors(), cellFn)
 
-    /** То же, что [assembleDense], с параметрами параллелизма из [context]. */
+    /** Same as [assembleDense], with parallelism settings taken from [context]. */
     public fun assembleDense(
         rows: Int,
         cols: Int,
@@ -69,7 +69,7 @@ public object ParallelAssembly {
     ): DenseMatrix = assembleDenseImpl(rows, cols, context.parallel, context.parallelism, cellFn)
 
     private fun requireShape(rows: Int, cols: Int) {
-        require(rows >= 0 && cols >= 0) { "размеры не могут быть отрицательными: $rows×$cols" }
+        require(rows >= 0 && cols >= 0) { "Matrix dimensions must be non-negative: $rows×$cols" }
     }
 
     private fun assembleRowsImpl(
@@ -83,10 +83,10 @@ public object ParallelAssembly {
         val result = arrayOfNulls<DoubleArray>(rows)
         forEachIndex(rows, parallel, parallelism) { i ->
             val row = rowFn(i)
-            require(row.size == cols) { "assembleRows: строка $i длины ${row.size}, ожидалось $cols" }
+            require(row.size == cols) { "assembleRows: row $i has length ${row.size}, expected $cols" }
             result[i] = row
         }
-        // Каждый индекс записан ровно один раз (иначе сработал бы require выше), null-ов не остаётся.
+        // Every index is written exactly once (otherwise the require above would have fired), so no nulls remain.
         @Suppress("UNCHECKED_CAST")
         return result as Array<DoubleArray>
     }
@@ -124,9 +124,9 @@ public object ParallelAssembly {
     }
 
     /**
-     * Выполняет [body] для индексов `0 until count`. Последовательно, если параллелизм запрещён,
-     * число потоков равно 1 или индексов меньше двух; иначе — параллельным потоком в общем пуле
-     * (`parallelism == availableProcessors`) либо в отдельном пуле заданного размера.
+     * Runs [body] for indices `0 until count`. Sequentially if parallelism is disabled,
+     * the thread count is 1, or there are fewer than two indices; otherwise as a parallel stream
+     * in the common pool (`parallelism == availableProcessors`) or in a dedicated pool of the given size.
      */
     private fun forEachIndex(count: Int, parallel: Boolean, parallelism: Int, body: (Int) -> Unit) {
         if (!parallel || parallelism == 1 || count < 2) {
