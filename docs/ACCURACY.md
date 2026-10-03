@@ -139,6 +139,36 @@ implementations with a corresponding tolerance (`ConcurrencyTest`, relative accu
 bit-level reproducibility is guaranteed only in sequential mode and in `ParallelAssembly`,
 where each task writes its result into its own region of memory.
 
+## Gauss–Jacobi quadrature, singular product quadrature and special functions
+
+Maximum errors measured by the tests `GaussJacobiTest`, `AlgebraicSingularQuadratureTest` and
+`SpecialFunctionsTest` (relative unless marked otherwise). These methods use scalar arithmetic
+only and do not depend on the BLAS/LAPACK implementation.
+
+| Method | Check | Measured maximum | Asserted tolerance |
+|---|---|---|---|
+| `GaussJacobi` | `a = b = 0` against `gaussLegendreReference(m)`, `m = 1..40`: nodes / weights (absolute) | 1.1e-16 / 4.9e-16 | 1e-14 |
+| `GaussJacobi` | exactness on `x^k`, `k ≤ 2m − 1`, 8 pairs `(a, b)`, `m ∈ {1, 2, 5, 12, 20}` | 7.3e-15 | 1e-13 |
+| `GaussJacobi` | moments `∫_0^t (t − s)^(−α) s^j ds`, `α ∈ {0.1, 1/3, 0.5, 2/3, 0.9}`, `j = 0..5` | 2.9e-15 | 1e-13 |
+| `GaussJacobi` | sum of the weights against `μ₀` (up to `m = 40`) | 4.3e-15 | 1e-14 |
+| `AlgebraicSingularQuadrature` | `alpha = 0` against `GaussLegendre` | 0.0 | 1e-15 |
+| `AlgebraicSingularQuadrature` | Volterra moments `t^(j+1−α) B(1 − α, j + 1)`, `α ∈ {1/3, 1/2, 2/3, 0.9}`, `j = 0..4`, 5 partitions | 1.3e-15 | 1e-13 |
+| `AlgebraicSingularQuadrature` | closed forms of `∫_0^1 |t − s|^(−1/2) {1, s} ds`, `t ∈ {0, 1e-6, 0.3, 0.5, 1}` | 4.7e-16 | 1e-13 |
+| `AlgebraicSingularQuadrature` | `f = e^s + cos 3s`, `t` inside, against split Gauss–Jacobi with 40 nodes | 3.2e-15 | 1e-13 |
+| `AlgebraicSingularQuadrature` | `t` outside the partition, against graded Gauss–Legendre with 30 nodes | 8.6e-16 | 1e-12 |
+| `AlgebraicSingularQuadrature` | `d = 2^(−58)` (cap `MAX_PIECES` not reached) / `d = 2^(−62)` (cap reached) | 4.4e-16 / 2.0e-9 | 1e-13 / 1e-6 |
+| `SpecialFunctions.gamma` | 34-digit reference, 5143 points on `(0, 171]` | 7.2e-16 | 1e-14 |
+| `SpecialFunctions.lnGamma` | Hipparchus `Gamma.logGamma`, 2401 points on `(1e-300, 1e5]`, error `/ max(1, |ln Γ|)` | 6.4e-16 | 1e-14 |
+| `SpecialFunctions.beta` | 34-digit reference, 3364 pairs `(p, q)` in `(0, 20]²` | 1.4e-15 | 1e-14 |
+| `SpecialFunctions.erfc` | 80-digit reference, 2931 points on `[−6, 26.55]` | 1.8e-15 | 1e-14 |
+| `SpecialFunctions.mittagLeffler` | `E_1(z) = e^z` / `E_2(z) = cosh √z`, `z ∈ [0, 3]` | 1.1e-15 / 6.5e-16 | 1e-13 |
+| `SpecialFunctions.mittagLeffler` | `E_{1/2}(z) = e^(z²) erfc(−z)` | 2.6e-15 | 1e-13 |
+
+Hipparchus is not used as the oracle for `gamma` above 20 and for `erfc` at large arguments: its own
+errors there (6.9e-14 for `Γ` near `x = 127.7`, 1.6e-13 for `erfc` near `x = 23.7`) exceed the
+errors of `SpecialFunctions`. The tests compare against the extended-precision references above and
+assert `1e-14` on the excess over the error of Hipparchus.
+
 ## Summary of guarantees
 
 | Method | Checked condition | Action on violation |

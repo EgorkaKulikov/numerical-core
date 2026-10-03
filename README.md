@@ -31,6 +31,12 @@ Primitives absent from LAPACK are implemented in the same style and with the sam
 Gauss–Legendre quadrature, parallel matrix assembly with a bit-for-bit reproducible result, and computation of the
 observed convergence order using only the measurements that exceed rounding noise.
 
+Additions for weakly singular integral equations:
+
+- `GaussJacobi` — Gauss–Jacobi rule for the weight `(1 − x)^a (1 + x)^b`, `a, b > −1`, mapped onto a finite interval.
+- `AlgebraicSingularQuadrature` — composite product quadrature for `∫ |t − s|^(−α) f(s) ds`, `0 ≤ α < 1`, over a partition.
+- `SpecialFunctions` — `gamma`, `lnGamma`, `beta`, `erfc` and the Mittag-Leffler function `mittagLeffler`.
+
 ## Setup
 
 JDK 21 or newer is required. The dependency `io.github.egorkakulikov:numerical-core:1.1.0` is published to GitHub Packages;
