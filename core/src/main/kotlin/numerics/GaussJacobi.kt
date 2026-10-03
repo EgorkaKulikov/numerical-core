@@ -92,8 +92,8 @@ public class GaussJacobi(public val m: Int, public val a: Double, public val b: 
             val beta = DoubleArray(m + 1) { k -> if (k == 0) 0.0 else recurrenceBeta(k, a, b) }
             val offDiag = DoubleArray(m + 1) { k -> sqrt(beta[k]) }
             val mu0 = exp(
-                (a + b + 1.0) * ln(2.0) + SpecialFunctionsInternal.lnGamma(a + 1.0) +
-                    SpecialFunctionsInternal.lnGamma(b + 1.0) - SpecialFunctionsInternal.lnGamma(a + b + 2.0),
+                (a + b + 1.0) * ln(2.0) + SpecialFunctions.lnGamma(a + 1.0) +
+                    SpecialFunctions.lnGamma(b + 1.0) - SpecialFunctions.lnGamma(a + b + 2.0),
             )
             val nodes = DoubleArray(m)
             val weights = DoubleArray(m)
@@ -182,35 +182,5 @@ public class GaussJacobi(public val m: Int, public val a: Double, public val b: 
             out[1] = d
             out[2] = sumSq
         }
-    }
-}
-
-/** Special functions used by the quadrature rules. */
-internal object SpecialFunctionsInternal {
-    private const val LANCZOS_G = 7.0
-    private const val HALF_LN_2PI = 0.91893853320467274178
-    private val LANCZOS = doubleArrayOf(
-        0.99999999999980993,
-        676.5203681218851,
-        -1259.1392167224028,
-        771.32342877765313,
-        -176.61502916214059,
-        12.507343278686905,
-        -0.13857109526572012,
-        9.9843695780195716e-6,
-        1.5056327351493116e-7,
-    )
-
-    /**
-     * Natural logarithm of the gamma function for `x > 0`: Lanczos approximation with `g = 7` and
-     * 9 coefficients for `x ≥ 1/2`, and `ln Γ(x) = ln Γ(x + 1) − ln x` for `x < 1/2`.
-     */
-    fun lnGamma(x: Double): Double {
-        if (x < 0.5) return lnGamma(x + 1.0) - ln(x)
-        val z = x - 1.0
-        var sum = LANCZOS[0]
-        for (i in 1 until LANCZOS.size) sum += LANCZOS[i] / (z + i)
-        val t = z + LANCZOS_G + 0.5
-        return HALF_LN_2PI + (z + 0.5) * ln(t) - t + ln(sum)
     }
 }

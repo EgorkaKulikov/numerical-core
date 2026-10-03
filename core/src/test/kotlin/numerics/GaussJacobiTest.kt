@@ -147,7 +147,7 @@ class GaussJacobiTest {
         val grid = (1..1000).map { it * 0.05 } + listOf(1e-12, 1e-6, 1e-3, 0.1, 0.25, 0.49, 0.51, 1.4616321449683623)
         for (x in grid) {
             val ref = Gamma.logGamma(x)
-            val got = SpecialFunctionsInternal.lnGamma(x)
+            val got = SpecialFunctions.lnGamma(x)
             assertTrue(abs(got - ref) <= 1e-14 * maxOf(1.0, abs(ref)), "x = $x: $got vs $ref")
         }
     }
