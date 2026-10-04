@@ -18,6 +18,9 @@ the LAPACK documentation for the routines called through netlib.
 | Gauss–Legendre nodes and weights on `[-1, 1]`: zeros of the Legendre polynomial `P_m` by Newton's method from the initial guess `cos(π (i + 3/4)/(m + 1/2))`, weights `2 / ((1 − x²) P_m'(x)²)` | `GaussLegendre.gaussLegendreReference` | [Davis, Rabinowitz 1984], ch. 2; [Stoer, Bulirsch 2002], §3.6 | Classical |
 | Composite quadrature over a partition of the interval with affine mapping of the nodes onto each subinterval | `GaussLegendre.integrate`, `integrateInterval` | [Davis, Rabinowitz 1984], ch. 2 | Classical |
 | Exactness on polynomials of degree `2m − 1` | verified by the quadrature tests | [Stoer, Bulirsch 2002], Theorem 3.6.12 | Classical |
+| Gauss–Jacobi nodes and weights for the weight `(1 − x)^a (1 + x)^b` on `[−1, 1]`: Jacobi matrix from the three-term recurrence of the monic Jacobi polynomials, its eigenvalues by Sturm-sequence bisection, Newton polish on the orthonormal polynomial `p̂_m`, Christoffel weights `μ₀ / Σ_{k<m} p̂_k(x_i)²` with `μ₀ = 2^(a+b+1) B(a + 1, b + 1)` | `GaussJacobi`, `GaussJacobi.gaussJacobiReference`, `GaussJacobi.integrate` | [Golub, Welsch 1969]; [DLMF], §18.9 (recurrence), §3.5 (Gauss–Jacobi formula); Sturm-sequence bisection: [Golub, Van Loan 2013], ch. 8 | Classical |
+| Product integration of `∫ |t − s|^(−α) f(s) ds`, `0 ≤ α < 1`: on a cell containing `t` the singular factor is absorbed into the weights of the Gauss–Jacobi rules with the weights `(t − s)^(−α)` on `[c0, t]` and `(s − t)^(−α)` on `[t, c1]` | `AlgebraicSingularQuadrature.integrate` | [Golub, Welsch 1969]; [DLMF], §3.5 (Gauss–Jacobi formula) | Classical |
+| Geometric refinement of a cell toward a nearby singular point `t` outside it (pieces at distances `d, 2d, 4d, …` from `t`), Gauss–Legendre rule on each piece | `AlgebraicSingularQuadrature.integrate`, `AlgebraicSingularQuadrature.MAX_PIECES` | to be supplied | Classical |
 
 ## 2. Dense linear algebra
 
@@ -50,6 +53,16 @@ the LAPACK documentation for the routines called through netlib.
 | Unified interface to BLAS/LAPACK implementations with automatic selection and explicit diagnostics | `numerics.backend.LinAlgBackend`, `Backends`, `NetlibBackend` | access through netlib | Original work |
 | Bundled OpenBLAS implementation | module `numerical-core-openblas`, `OpenBlas.install()` | OpenBLAS; JavaCPP Presets | Classical |
 
+## 5. Special functions
+
+| Element | Implementation | Source | Status |
+|---|---|---|---|
+| `Γ(x)`, `ln Γ(x)`: Stirling series with 8 terms (coefficients `B_2k/(2k(2k − 1))`, `k = 1..8`) for `x ≥ 10`; below 10 the recurrence `Γ(x + 1) = x Γ(x)` up to `x + k ≥ 10` | `SpecialFunctions.gamma`, `SpecialFunctions.lnGamma` | [DLMF], §5.11 (Stirling series), §5.5 (recurrence) | Classical |
+| Compensated recurrence: the rounding errors of the shifted arguments `x + j` computed exactly (TwoSum) and compensated to first order, `Γ(y + e) ≈ Γ(y)(1 + ψ(y)e)` | `SpecialFunctions.gamma`, `SpecialFunctions.lnGamma` | to be supplied | Classical |
+| `B(p, q) = Γ(p)·(Γ(q)/Γ(p + q))` for `p + q ≤ 170` with a first-order correction for the rounding of `p + q`; `exp(ln Γ(p) + ln Γ(q) − ln Γ(p + q))` above | `SpecialFunctions.beta` | [DLMF], §5.12 | Classical |
+| `erfc(x)`: Maclaurin series of `erf` for `|x| < 1`; for `x ≥ 1` the Legendre continued fraction of `Γ(1/2, x²)` evaluated backward with `12 + 160/x²` levels; `exp(−x²)` computed as `exp(−s²)·exp(−(x − s)(x + s))` with `s = ⌊16x⌋/16` (Cody's split); `erfc(x) = 2 − erfc(−x)` for `x ≤ −1` | `SpecialFunctions.erfc` | [DLMF], §7.6 (series), §7.9 and §8.9 (continued fractions); split of `exp(−x²)`: routine `CALERF` of [Cody 1993], which implements [Cody 1969] | Classical |
+| Mittag-Leffler function `E_β(z) = Σ_{k≥0} z^k / Γ(βk + 1)`: the defining power series (positive terms, no cancellation) | `SpecialFunctions.mittagLeffler` | [DLMF], §10.46 | Classical |
+
 ## References
 
 1. **[Davis, Rabinowitz 1984]** Davis P. J., Rabinowitz P. Methods of Numerical
@@ -68,3 +81,22 @@ the LAPACK documentation for the routines called through netlib.
 7. **OpenBLAS** — an optimized BLAS/LAPACK implementation. BSD-3-Clause License.
    <https://github.com/OpenMathLib/OpenBLAS>. Shipped via JavaCPP Presets
    (`org.bytedeco:openblas`, Apache-2.0 / GPLv2 with classpath exception license).
+8. **[Golub, Welsch 1969]** Golub G. H., Welsch J. H. Calculation of Gauss quadrature rules //
+   Mathematics of Computation. — 1969. — Vol. 23, no. 106. — P. 221–230. —
+   DOI: 10.1090/S0025-5718-69-99647-1.
+9. **[Cody 1969]** Cody W. J. Rational Chebyshev approximations for the error function //
+   Mathematics of Computation. — 1969. — Vol. 23, no. 107. — P. 631–637. —
+   DOI: 10.1090/S0025-5718-1969-0247736-4.
+10. **[Cody 1993]** Cody W. J. Algorithm 715: SPECFUN–a portable FORTRAN package of special
+    function routines and test drivers // ACM Transactions on Mathematical Software. — 1993. —
+    Vol. 19, no. 1. — P. 22–30. — DOI: 10.1145/151271.151273. Routine `CALERF`:
+    <https://www.netlib.org/specfun/erf>.
+11. **[DLMF]** NIST Digital Library of Mathematical Functions. <https://dlmf.nist.gov/>,
+    Version 1.2.8, release date 2026-09-15 (accessed 2026-10-04). Sections used:
+    §3.5 Quadrature (<https://dlmf.nist.gov/3.5>), §5.5 Functional Relations
+    (<https://dlmf.nist.gov/5.5>), §5.11 Asymptotic Expansions (<https://dlmf.nist.gov/5.11>),
+    §5.12 Beta Function (<https://dlmf.nist.gov/5.12>), §7.6 Series Expansions
+    (<https://dlmf.nist.gov/7.6>), §7.9 Continued Fractions (<https://dlmf.nist.gov/7.9>),
+    §8.9 Continued Fractions (<https://dlmf.nist.gov/8.9>), §10.46 Generalized and Incomplete
+    Bessel Functions; Mittag-Leffler Function (<https://dlmf.nist.gov/10.46>), §18.9 Recurrence
+    Relations and Derivatives (<https://dlmf.nist.gov/18.9>).
