@@ -39,7 +39,7 @@ Additions for weakly singular integral equations:
 
 ## Setup
 
-JDK 21 or newer is required. The dependency `io.github.egorkakulikov:numerical-core:1.1.0` is published to GitHub Packages;
+JDK 21 or newer is required. The dependency `io.github.egorkakulikov:numerical-core:1.2.0` is published to GitHub Packages;
 reading it requires a token with the `read:packages` scope (`gpr.user` and `gpr.token` in `~/.gradle/gradle.properties` or environment variables):
 
 ```kotlin
@@ -53,7 +53,7 @@ maven {
 ```
 
 If the machine has no system BLAS/LAPACK implementation, add the dependency
-`io.github.egorkakulikov:numerical-core-openblas:1.1.0` and call `OpenBlas.install()` before the first
+`io.github.egorkakulikov:numerical-core-openblas:1.2.0` and call `OpenBlas.install()` before the first
 use of the library: it unpacks OpenBLAS for the current platform (see `openblas/README.md`).
 
 ## Documentation
